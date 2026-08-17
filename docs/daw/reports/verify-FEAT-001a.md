@@ -214,3 +214,197 @@ Alcance aprobado por el usuario para la vuelta a CODE:
    `FormularioMovimiento.tsx:347` — WARNING 4.
 
 Los WARNINGs 2, 3, 5, 6, 7 y 8 quedan registrados como deuda aceptada, sin acción en este ticket.
+
+---
+
+## Ronda 2 — 2026-08-17 — **PASSED**
+
+Verificación cruzada tras el bucle correctivo (commit `7583be5`). Ejecutada por `daw-module-verifier`
+sobre código que no escribió.
+
+### Estado medido
+
+| Medición | Resultado |
+|----------|-----------|
+| Suite backend (xUnit) | 87/87 verde |
+| Suite frontend (Vitest) | 42/42 verde, 6 archivos |
+| Cobertura backend (`Migrations/` excluido) | líneas **97,64%** (415/425) · ramas **93,58%** (73/78) · métodos **97,30%** (36/37) |
+| Cobertura frontend | líneas **92,89%** (170/183) · ramas **86,41%** (70/81) · funciones **93,75%** (45/48) |
+| `frontend/src/App.tsx` | **100%** — 3/3 líneas, 3/3 funciones (era 0%) |
+| `pnpm lint` · `pnpm format` · `pnpm build` | limpios |
+| `dotnet build -warnaserror` · `dotnet format --verify-no-changes` | 0 warnings · limpio |
+
+### Resultado por regla
+
+| Regla | Ronda 1 | Ronda 2 |
+|-------|---------|---------|
+| **F-VER-01** | ❌ AC-05, AC-06 | ✅ **cerrados**; 18 ✅, 1 ⚠️ (AC-18) |
+| **F-VER-02** | ✅ | ✅ 5/5 bloques, más 18 archivos fuera de lista auditados uno por uno |
+| **F-VER-03** | ✅ | ✅ las tres métricas sobre 80% en ambos lados |
+| **F-VER-04** | ✅ | ✅ con una corrección a la ronda 1 (ver N2) |
+| **F-VER-05** | ✅ | ✅ |
+| **F-VER-06** | ❌ | ✅ los **79** nombres de test de la spec verificados uno por uno: 79/79 en disco y verdes |
+| **W-VER-01** | ⚠️ 2 | ⚠️ 4 (2 heredados, 2 nuevos) |
+| **W-VER-02** | ✅ | ✅ por encima del rango |
+| **W-VER-03** | ⚠️ | ⚠️ sin flakiness activa |
+
+```
+FAILs: 0 · WARNs: 11 (6 heredados + 5 nuevos) · PASSes: 41
+Veredicto: PASSED
+```
+
+### Los dos FAIL cerrados, con evidencia de mutación reproducida
+
+El mutante que sobrevivía en la ronda 1 —`<FormularioMovimiento onCreado={…} />` →
+`<FormularioMovimiento />` en `App.tsx:13`— ahora **muere dos veces**:
+
+```
+Tests  2 failed | 40 passed (42)
+FAIL App_TrasUnAltaDeGasto_…   → Unable to find an element with the text: 17/08/2026  (App.test.tsx:95)
+FAIL App_TrasUnAltaDeIngreso_… → Unable to find an element with the text: 16/08/2026  (App.test.tsx:123)
+```
+
+El verificador aplicó el mutante él mismo, no aceptó el autorreporte. En total produjo **4 mutantes
+muertos y 1 sobreviviente localizado** (ver N2). Esa es la garantía que el rojo-primero pretende
+demostrar, verificada directamente: para estos cuatro cambios el TDD era imposible por construcción
+—VERIFY encontró el hueco, CODE lo tapó—, así que la mutación es la evidencia equivalente y es más
+fuerte.
+
+### Corrección: qué cubre y qué NO cubre el test de ingreso
+
+Se sospechó que el test de ingreso podía dar verde sin distinguir el tipo. **La sospecha era
+correcta.** El mutante `tipoEsperado: tipo` → `tipoEsperado: 'gasto'`
+(`FormularioMovimiento.tsx:152`, el payload miente el tipo) deja `App_TrasUnAltaDeIngreso_…` en
+**verde**: el `fetch` falso devuelve `INGRESO_CREADO` hardcodeado sin mirar el cuerpo del POST, así
+que la fila de la tabla es el eco del doble, no una consecuencia de lo que la app mandó. Lo mata
+únicamente `Formulario_IngresoValido_EnviaYLimpia:173`
+(`expect(cuerpo.tipoEsperado).toBe('ingreso')`).
+
+Lo que el test de ingreso **sí** aporta, y nadie más aporta: que la costura alta→refresco funciona
+también desde el camino de ingreso (radio → lista filtrada por tipo → alta → recarga → fila). Lo
+prueba el mutante de `cambiarTipo` sin `setTipo(nuevo)`, que sí lo mata — y de paso refuta la otra
+sospecha, la del orden de los pasos: si el tipo no cambiara, la opción `8` no existiría en el
+`<select>` y `selectOptions` **lanza**, no manda vacío (`Value "8" not found in options`).
+
+**Por lo tanto AC-06 queda cerrado por la conjunción de tres tests, no por `App.test.tsx` solo.** No
+es FAIL: la mitad que estaba huérfana en la ronda 1 era *"…y mostrarlo en el listado"*, y esa es
+exactamente la que este test cubre. Queda escrito acá porque el nombre del test promete más de lo que
+entrega, y ese fue precisamente el defecto que costó la ronda 1.
+
+### La aserción sincrónica: verificada en las dos direcciones
+
+Se cambió `await waitFor(() => expect(lecturasDelListado()).toBe(2))` por la forma sincrónica. Las
+dos objeciones posibles quedaron resueltas:
+
+- **El `waitFor` no aportaba espera, aportaba la ilusión de espera.** Resuelve en el primer poll que
+  no lanza; a esa altura el contador ya vale 2, así que nunca observaría una tercera lectura.
+- **La forma sincrónica no abre la carrera inversa.** `lecturas += 1` ocurre al recibir el request, y
+  la línea anterior es un `await findByText` de la fila nueva, que solo puede estar en el DOM si la
+  segunda respuesta ya se renderizó. Cuando la aserción corre, el contador es necesariamente ≥ 2.
+- **Y atrapa lo que dice atrapar.** Mutante `useCallback(cargar, [])` → `[items]`, que dispara refetch
+  en bucle: `AssertionError: expected 23 to be 2`. La cota superior es lo único que ve el bucle,
+  porque la fila aparece igual.
+
+### La extracción de `json`: sin deriva de defaults
+
+Auditadas **las 22 llamadas** de los tres archivos. El riesgo era que alguna quedara apoyada en el
+default nuevo habiendo tenido `estado` obligatorio antes: en `FormularioMovimiento.test.tsx`, la
+variante con `estado` obligatorio, **las 8 llamadas lo pasan explícito**. Ninguna cambió de
+comportamiento.
+
+### Trazabilidad de archivos
+
+En la spec y no en disco: **cero**. En disco y no en la spec: **18 archivos, y los 18 son test,
+test-infra o configuración de tooling — cero código de producción se colonizó ahí.** Leídos uno por
+uno. Son omisiones de la lista de archivos, no fugas de responsabilidad; van a la errata (ítems 7 a
+9).
+
+### WARNINGs nuevos de la ronda 2
+
+- **N1 · W-VER-01 — `senal?: AbortSignal` es capacidad muerta.** `obtenerCategorias`
+  (`cliente.ts:49`) y `obtenerMovimientos` (`:53`) aceptan un `AbortSignal` que **ningún llamador
+  pasa jamás**, ni en producción ni en tests; `grep -rn "AbortController" src/` vuelve vacío. Es la
+  causa directa de 4 de las 11 ramas frontend sin cubrir. Borrar el parámetro.
+- **N2 · `leerProblema` tiene un mutante sobreviviente, demostrado.** `cliente.ts:113-117` maneja el
+  caso del 502-de-proxy-con-HTML y es la única línea sin cubrir de `cliente.ts`. Borrando el
+  `try/catch` completo, la suite queda **42/42 verde**: ningún test envía un cuerpo de error no-JSON.
+  No es FAIL —ningún AC ni test comprometido por la spec lo cubre— pero **contradice lo que la ronda 1
+  acreditó bajo F-VER-04**, donde se dio por existente un caso "cuerpo no-JSON" del cliente HTTP que
+  no existe. Son 3 líneas de test.
+- **N3 · La extracción de `json` quedó a mitad de camino.** `cliente.test.ts:19` conserva una
+  **cuarta** copia del helper con otro nombre (`respuesta`), idéntica salvo el `estado` obligatorio.
+- **N4 · `src/test/infra.ts` está dentro del `include` de cobertura.** `vite.config.ts` excluye
+  `main.tsx` y `*.test.*`, no `src/test/`: infra de test contada en el denominador. Impacto medido:
+  excluyéndola, 92,86% líneas · 86,08% ramas · 93,62% funciones. Las tres siguen sobre 80% y el
+  veredicto no cambia.
+- **N5 · `TipoMovimientoTexto` al 87,5% de ramas** (`MovimientoDto.cs:36`): el
+  `throw new ArgumentOutOfRangeException` del `switch` sobre el enum, inalcanzable con un valor
+  válido. Informativo, misma categoría que el WARNING 2.
+
+### Estado de los WARNINGs de la ronda 1
+
+**Corrección de aritmética:** la ronda 1 dejó 8 WARNINGs y se accionaron **dos** (1 y 4) — AC-06 no
+era un WARNING, era la mitad de un FAIL. Quedan **6**, no 5.
+
+| # ronda 1 | Ronda 2 |
+|-----------|---------|
+| 1 · `ResultadoValidacion.Errores` | **RESUELTO**, verificado por lectura y `grep` |
+| 4 · claves de error cruzadas | **RESUELTO**; la rama `:347` se ejerce y el combinado es el único que mata la pérdida de la unión |
+| 2 · `MontoJsonConverter.Write` | ⚠️ sigue — el **único** método backend sin cubrir |
+| 3 · AC-18 accesibilidad parcial | ⚠️ sigue |
+| 5 · `*_FalloDeBase_*` verifican el handler global | ⚠️ sigue |
+| 6 · `total`/`items` sin transacción | ⚠️ sigue |
+| 7 · ids de semilla hardcodeados | ⚠️ sigue; `App.test.tsx` suma 1/8 pero enruta por endpoint, no empeora |
+| 8 · `formatearFecha`/`formatearMonto` solo camino feliz | ⚠️ sigue |
+
+Ninguno se degradó a FAIL. Ninguno incumple un AC, un test comprometido por la spec ni un umbral de
+cobertura.
+
+### Estado del árbol
+
+El verificador aplicó y revirtió 5 mutantes. `git diff HEAD` vacío; `git status --porcelain` devuelve
+solo los dos archivos sin trackear que están fuera del ticket a propósito. No escribió una línea de
+código de producción.
+
+**Gate:** `gates.verify` = `true`. El ticket puede pasar a RELEASE.
+
+---
+
+## Errata de la spec — pendiente de aplicar en el PLAN de FEAT-001b
+
+**Por qué no se corrige en este ticket.** El grafo de transiciones
+(`.daw/rules/transition-graph.json`, tier FEATURE) tiene exactamente dos aristas hacia atrás:
+`PLAN->DEFINE` y `VERIFY->CODE`. No existe `CODE->PLAN` ni `VERIFY->PLAN`, y la spec solo se puede
+modificar en PLAN: desde CODE o VERIFY es inalcanzable, y el hook `validate-state-transition.sh`
+rechaza el intento. Pausar tampoco sirve — un ticket reanuda la fase desde la que se pausó. La única
+forma de volver a PLAN con este ticket sería abandonarlo y reclasificar, tirando los gates de cinco
+bloques, dos rondas de revisión y dos SAST para corregir unos números y un campo de documentación.
+
+**Decisión del usuario (2026-08-17):** este reporte es el registro autoritativo —**donde la spec y el
+código difieran, gana el código**— y las ediciones se aplican en el **PLAN de FEAT-001b**, que es
+cuando se vuelve a estar legítimamente en esa fase. No es una postergación por comodidad: FEAT-001b
+consume el contrato del POST, así que el ítem 6 es el que muerde primero.
+
+| # | Ubicación | Edición |
+|---|-----------|---------|
+| 1 | `spec:187` | `los 12 tests de arriba pasan` → **14** |
+| 2 | `spec:298` | `Los 25 tests pasan` → `Los **26** tests listados pasan` |
+| 3 | `spec:363` | `Los 8 tests pasan` → **10** |
+| 4 | `spec:299-300` | `los ocho casos de rechazo devuelven 400` → `los casos de rechazo listados devuelven 400`. Son 10 nombrados y 12 tras el cierre: un número fijo vuelve a envejecer mal |
+| 5 | `spec:99-102` | Borrar `con un valor por defecto apuntando a gestiongastos_test en localhost` y escribir la regla de **ADR-002**: sin la variable `ConnectionStrings__Default`, el gate falla nombrándola. Un default silencioso convierte un error de configuración en un error de autenticación contra una base ajena. La implementación ya sigue al ADR |
+| 6 | `spec:232` | Agregar al contrato del `POST /api/movimientos`: `tipoEsperado?: "gasto" \| "ingreso"` — **opcional**, se compara contra el tipo de la categoría y **no se persiste**. Hoy el "API contract" lo omite mientras el "Error handling" (`spec:261`) lo exige, y la implementación sigue al segundo |
+| 7 | `spec:454-462` | La lista de archivos del Bloque 5 omite `frontend/src/App.test.tsx` y `frontend/src/test/infra.ts` — los dos archivos que cerraron el FAIL de ese mismo bloque |
+| 8 | `spec:305-311` | La lista del Bloque 3 omite `backend/GestionGastos.Api.Tests/Infra/ObservadorDeSql.cs`, la pieza que sostiene la doble capa contra la trampa del índice |
+| 9 | `spec:83-85` | La lista del Bloque 1 omite 5 archivos de `Tests/Infra/` y `Tests/Datos/` que contienen tests que la spec **sí nombra**, más `AssemblyInfo.cs` y `coverlet.runsettings`; la del Bloque 4 omite `frontend/.prettierignore` |
+| 10 | `spec:495` | `Listado_TrasUnAlta_MuestraElMovimientoNuevo` está descrito como *"valida AC-05 y AC-06 de punta a punta"* y no lo hace: simula la costura con `rerender()`. **Es el defecto que costó la ronda 1** — la descripción de la spec registraba una garantía que el test no daba. Corregirla a lo que el test verifica y atribuir AC-05/AC-06 a `App.test.tsx` |
+
+**Prioridad si hay que recortar:** los ítems 1 a 4 y 9 son aritmética y listas, y no afectan a nadie
+salvo a quien lea la spec buscando un número. El **5** contradice un ADR, el **6** deja un campo del
+contrato sin documentar en el artefacto que FEAT-001b va a leer, y el **10** es el que ya costó una
+ronda de verificación. Esos tres primero.
+
+## Candidatos para el arranque de FEAT-001b
+
+Tres tests y un borrado de parámetro, todos localizados con `archivo:línea` arriba: **N2** (el mutante
+sobreviviente de `leerProblema`), **N1** (borrar el `AbortSignal` muerto) y **N3** (la cuarta copia
+del helper `json`).

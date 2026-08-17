@@ -1,4 +1,9 @@
-import type { CategoriaDto, CrearMovimientoRequest, MovimientoDto } from './tipos';
+import type {
+  CategoriaDto,
+  CrearMovimientoRequest,
+  ListadoMovimientosResponse,
+  MovimientoDto,
+} from './tipos';
 
 /** Un mensaje por campo, listo para mostrarse junto al control correspondiente. */
 export type ErroresPorCampo = Record<string, string>;
@@ -43,6 +48,13 @@ const BASE = '/api';
 
 export async function obtenerCategorias(senal?: AbortSignal): Promise<CategoriaDto[]> {
   return await pedir<CategoriaDto[]>('/categorias', senal ? { signal: senal } : {});
+}
+
+export async function obtenerMovimientos(senal?: AbortSignal): Promise<ListadoMovimientosResponse> {
+  return await pedir<ListadoMovimientosResponse>(
+    '/movimientos',
+    senal ? { signal: senal } : {},
+  );
 }
 
 export async function crearMovimiento(entrada: CrearMovimientoRequest): Promise<MovimientoDto> {

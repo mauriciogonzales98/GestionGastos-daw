@@ -17,8 +17,6 @@ public sealed class ResultadoValidacion
 
     public bool EsValido => _errores.Count == 0;
 
-    public IReadOnlyList<ErrorDeValidacion> Errores => _errores;
-
     public ResultadoValidacion Agregar(string campo, string mensaje)
     {
         _errores.Add(new ErrorDeValidacion(campo, mensaje));

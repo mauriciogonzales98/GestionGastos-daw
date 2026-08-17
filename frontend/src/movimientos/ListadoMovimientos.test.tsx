@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ListadoMovimientos } from './ListadoMovimientos';
 import type { ListadoMovimientosResponse, MovimientoDto } from '../api/tipos';
+import { json } from '../test/infra';
 
 const MOVIMIENTO_1: MovimientoDto = {
   id: 1,
@@ -23,13 +24,6 @@ const MOVIMIENTO_2: MovimientoDto = {
   fecha: '2026-08-01',
   nota: null,
 };
-
-function json(cuerpo: unknown, estado = 200): Response {
-  return new Response(JSON.stringify(cuerpo), {
-    status: estado,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 function respuestaListado(items: MovimientoDto[], recortado = false): ListadoMovimientosResponse {
   return { items, recortado, total: items.length };

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormularioMovimiento } from './FormularioMovimiento';
 import type { CategoriaDto, MovimientoDto } from '../api/tipos';
+import { json } from '../test/infra';
 
 const CATEGORIAS: CategoriaDto[] = [
   { id: 1, nombre: 'Comida', tipo: 'gasto' },
@@ -28,13 +29,6 @@ const CREADO: MovimientoDto = {
 };
 
 type RespuestaDeAlta = () => Promise<Response>;
-
-function json(cuerpo: unknown, estado: number, tipo = 'application/json'): Response {
-  return new Response(JSON.stringify(cuerpo), {
-    status: estado,
-    headers: { 'Content-Type': tipo },
-  });
-}
 
 /** Enruta el `fetch` global por endpoint, para no acoplar los tests al orden de las llamadas. */
 function prepararFetch(opciones?: {
@@ -326,6 +320,67 @@ describe('FormularioMovimiento', () => {
     await usuario.click(seleccionar.guardar());
 
     await waitFor(() => expect(motivoDe(seleccionar.categoria())).toMatch(/gasto o ingreso/i));
+  });
+
+  it('Formulario_CruceDeTipoDelServidor_MuestraElMotivoJuntoAlSelector', async () => {
+    // El caso real de AC-10 tal como llega del servidor: una sola clave, `errors.categoriaId`, con
+    // el literal que emite MovimientosEndpoints. Cubre la rama en que `tipoEsperado` no viene y el
+    // mapeo devuelve el resto sin tocarlo.
+    const { usuario } = await renderizarConCategorias(async () =>
+      json(
+        {
+          status: 400,
+          errors: {
+            categoriaId: [
+              "La categoría 'Sueldo' es de tipo ingreso y no puede usarse en un movimiento de tipo gasto",
+            ],
+          },
+        },
+        400,
+        'application/problem+json',
+      ),
+    );
+
+    await usuario.selectOptions(seleccionar.categoria(), '1');
+    await usuario.type(seleccionar.monto(), '10');
+    await usuario.click(seleccionar.guardar());
+
+    await waitFor(() =>
+      expect(motivoDe(seleccionar.categoria())).toBe(
+        "La categoría 'Sueldo' es de tipo ingreso y no puede usarse en un movimiento de tipo gasto",
+      ),
+    );
+  });
+
+  it('Formulario_CruceYFormatoJuntos_UneLosDosMotivosEnElSelector', async () => {
+    // Con las dos claves presentes ninguna puede pisar a la otra: el mapeo las une. Un mutante que
+    // devolviera solo una de las dos sobrevive a los otros dos tests, no a este.
+    const { usuario } = await renderizarConCategorias(async () =>
+      json(
+        {
+          status: 400,
+          errors: {
+            categoriaId: [
+              "La categoría 'Sueldo' es de tipo ingreso y no puede usarse en un movimiento de tipo gasto",
+            ],
+            tipoEsperado: ['El tipo debe ser gasto o ingreso'],
+          },
+        },
+        400,
+        'application/problem+json',
+      ),
+    );
+
+    await usuario.selectOptions(seleccionar.categoria(), '1');
+    await usuario.type(seleccionar.monto(), '10');
+    await usuario.click(seleccionar.guardar());
+
+    await waitFor(() =>
+      expect(motivoDe(seleccionar.categoria())).toBe(
+        "La categoría 'Sueldo' es de tipo ingreso y no puede usarse en un movimiento de tipo gasto " +
+          'El tipo debe ser gasto o ingreso',
+      ),
+    );
   });
 
   it('Formulario_ErrorDeRed_MuestraMensajeYPermiteReintentar', async () => {

@@ -117,3 +117,46 @@ Informativos: 2
 ```
 
 **Gate:** `gates.sast` = `true`.
+
+---
+
+## Ronda 2 — 2026-08-17 — re-escaneo tras el bucle correctivo de VERIFY
+
+VERIFY volvió BLOCKED (ver `docs/daw/reports/verify-FEAT-001a.md`) y el bucle correctivo cambió
+código, así que el gate se vuelve a pagar. **No es un re-sello del anterior:** se reescaneó el delta
+completo y se repitieron las categorías obligatorias.
+
+**Delta auditado** respecto de `e337cd0`, el commit que cerró la ronda 1:
+
+| Archivo | Cambio |
+|---------|--------|
+| `backend/GestionGastos.Api/Common/ResultadoValidacion.cs` | −2: borrada la propiedad muerta `Errores` |
+| `frontend/src/App.test.tsx` | nuevo: 2 tests de la costura alta → listado |
+| `frontend/src/test/infra.ts` | nuevo: helper `json` compartido |
+| `frontend/src/movimientos/FormularioMovimiento.test.tsx` | +2 tests de claves de error cruzadas |
+| `frontend/src/movimientos/ListadoMovimientos.test.tsx` | consume el `json` compartido |
+
+**Superficie de ataque: sin cambios.** El único archivo de producción que se tocó fue para **quitar**
+un miembro público sin llamadores; todo lo demás es código de test. No se agregó ningún endpoint,
+ninguna entrada de usuario, ninguna consulta ni ninguna dependencia.
+
+| Regla | Verificación | Resultado |
+|-------|--------------|-----------|
+| F-SAST-01 | Patrones de credencial en el delta completo (`git diff e337cd0`) | ✅ ninguno |
+| F-SAST-02 | `FromSqlRaw` / `ExecuteSqlRaw` / `*Interpolated` en producción | ✅ ninguna aparición |
+| F-SAST-04 / F-SAST-06 | `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `new Function` en `frontend/src/` | ✅ ninguna aparición |
+| F-SAST-14 | Sin cambios en la validación de entrada: `ValidadorMovimiento` intacto desde la ronda 1 | ✅ |
+| F-SAST-15 | Sin cambios en el manejo de errores. `ResultadoValidacion` conserva `ComoDiccionario()` como única salida y `_errores` sigue encapsulado | ✅ |
+| F-SAST-13 / F-SAST-16 | `pnpm audit --audit-level moderate` → *No known vulnerabilities found*; `dotnet list package --vulnerable --include-transitive` → sin paquetes vulnerables | ✅ |
+| — | 0 `any`, 0 `console.log` en `frontend/src/` | ✅ |
+
+**Nota sobre el helper nuevo.** `frontend/src/test/infra.ts` construye respuestas HTTP falsas para los
+tests con `new Response(JSON.stringify(...))`. No entra en el bundle de producción —`vite build` solo
+sigue el grafo desde `src/main.tsx`— y no ejecuta nada que venga de una fuente externa.
+
+```
+Ronda 2: 7 verificaciones limpias, 0 vulnerabilidades (0 Critical, 0 High, 0 Medium)
+Supresiones: 0 · Informativos nuevos: 0 (los dos de la ronda 1 siguen vigentes)
+```
+
+**Gate:** `gates.sast` = `true` (reganado).

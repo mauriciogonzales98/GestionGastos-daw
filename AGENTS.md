@@ -27,7 +27,7 @@ If this project has a fixed working language, state it here and use it instead:
 
 App de registro y gestión de gastos e ingresos personales, cargados por formulario, con un dashboard para visualizarlos.
 
-**Reference PRD:** `docs/daw/prd/[your-prd].md`
+**Reference PRD:** `docs/daw/prd/PRD.md`
 
 ---
 
@@ -41,12 +41,12 @@ files and **propose the text for you to paste here**. You always confirm it.
 
 | Field | Value |
 |-------|-------|
-| Language | Javascript para frontend, C# para backend |
-| Runtime | Node 24 + pnpm |
-| Framework | React 19 + Vite, Node 24, .NET 10 (SDK 10.0.301), Entity Framework Core 9.0.18 + Pomelo.MySQL 9.0.0 |
-| Database | MySQL 8.4.5 local, puerto 3306, schema `gestiongastos` |
+| Language | Typescript para frontend, C# para backend |
+| Runtime | Node 22.x + pnpm |
+| Framework | React 19 + Vite, Node 22.x, .NET 10 (SDK 10.0.301), Entity Framework Core 9.0.18 + Pomelo.MySQL 9.0.0 |
+| Database | MySQL 8.4.10 local, puerto 3306, schema `gestiongastos` |
 | Test runner | xUnit en backend, Vitest en frontend |
-| Linter / formatter | [e.g. ESLint + Prettier] |
+| Linter / formatter | ESLint + Prettier |
 | Package manager | pnpm |
 
 ---
@@ -56,7 +56,7 @@ files and **propose the text for you to paste here**. You always confirm it.
 **DAW validates your code against this section** during the CODE phase, via `daw-validate-arch`.
 Leave it empty and that validation has nothing to compare against, so it stops being worth running.
 
-- **Folder structure:** frontend y backend separados en sus respectivas carpetas. 
+- **Folder structure:** frontend y backend separados en sus respectivas carpetas(`backend/` para el backend y `frontend/` para el frontend). 
 - **Error handling:** typed errors; never a silent catch
 - **Dependencies:** no new libraries without justifying them in the spec
 
@@ -77,7 +77,6 @@ wrong once.
 
 - No guardar contraseñas en texto plano: deben almacenarse con hash seguro (bcrypt/argon2) (RNF-03).
 - No commitear credenciales: ni en `appsettings*.json` ni en los `.sql` de `backend/db/`.
-- No correr `pnpm install` desde WSL (ver arriba).
 
 ---
 

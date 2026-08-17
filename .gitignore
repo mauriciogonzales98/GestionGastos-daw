@@ -12,3 +12,23 @@
 # Python bytecode (generado por los scripts de .daw/)
 __pycache__/
 *.pyc
+
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+.vs/
+
+# Node
+node_modules/
+dist/
+coverage/
+.vite/
+
+# Secretos: la cadena de conexión vive en user-secrets, nunca en el repo (mitigación R-11)
+appsettings.Development.json
+appsettings.Local.json
+.env
+.env.*

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <!--
+            Las migraciones las genera `dotnet ef`: no se escriben a mano, no se testean y su Up/Down
+            solo corre en el arranque de la base. Contarlas hunde la cobertura reportada del proyecto
+            (52,4% con ellas, 96,8% sin ellas) y el gate mide el código propio, que es lo que la
+            suite puede ejercitar.
+          -->
+          <ExcludeByFile>**/Migrations/*.cs</ExcludeByFile>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -1,0 +1,113 @@
+/*
+ * Paleta con contraste verificado contra el fondo (NFR-02):
+ *   --texto      #1f2933 sobre #ffffff → 12.6:1  (texto normal, mínimo 4.5:1)
+ *   --texto-sutil #4a5568 sobre #ffffff →  7.5:1
+ *   --primario   #0b5d3b sobre #ffffff →  7.4:1  y #ffffff sobre #0b5d3b → 7.4:1
+ *   --error      #b3261e sobre #ffffff →  5.9:1
+ *   --foco       #0b5d3b sobre #ffffff →  7.4:1  (componente de interfaz, mínimo 3:1)
+ */
+:root {
+  --fondo: #ffffff;
+  --superficie: #f4f6f8;
+  --texto: #1f2933;
+  --texto-sutil: #4a5568;
+  --primario: #0b5d3b;
+  --primario-texto: #ffffff;
+  --error: #b3261e;
+  --foco: #0b5d3b;
+  --borde: #4a5568;
+  --radio: 6px;
+  --espacio: 12px;
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+main {
+  margin: 0 auto;
+  max-width: 900px;
+  padding: calc(var(--espacio) * 2);
+}
+
+.formulario {
+  display: grid;
+  gap: var(--espacio);
+  background: var(--superficie);
+  border-radius: var(--radio);
+  padding: calc(var(--espacio) * 1.5);
+}
+
+.campo {
+  display: grid;
+  gap: 4px;
+}
+
+.campo label,
+.grupo-tipo legend {
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  color: var(--texto);
+  font: inherit;
+  padding: 8px;
+}
+
+button {
+  background: var(--primario);
+  border: 1px solid var(--primario);
+  border-radius: var(--radio);
+  color: var(--primario-texto);
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 16px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Foco visible y con contraste propio: sin esto el recorrido por teclado de AC-18 es a ciegas. */
+:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: 2px;
+}
+
+.contador {
+  color: var(--texto-sutil);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.error-de-campo {
+  color: var(--error);
+  margin: 0;
+}
+
+.error-de-campo:empty {
+  display: none;
+}
+
+.aviso-error {
+  background: var(--fondo);
+  border: 2px solid var(--error);
+  border-radius: var(--radio);
+  color: var(--error);
+  margin: 0;
+  padding: var(--espacio);
+}

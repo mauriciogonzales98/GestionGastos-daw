@@ -9,11 +9,30 @@
 
 ## Sub-tickets
 
-| Sub-ticket | Título | PRD | Dependencias | Estado |
-|---|---|---|---|---|
-| FEAT-001a | Alta de movimientos y listado simple | prd-FEAT-001a.md | ninguna | activo |
-| FEAT-001b | Filtros del listado, edición y eliminación de movimientos | prd-FEAT-001b.md | depende de a | pendiente |
-| FEAT-001c | Resumen del mes con desglose por categoría | prd-FEAT-001c.md | depende de a y de b | pendiente |
+| Sub-ticket | Título | PRD | Dependencias | Estado | Integración |
+|---|---|---|---|---|---|
+| FEAT-001a | Alta de movimientos y listado simple | prd-FEAT-001a.md | ninguna | **done** | Mergeado a `main` con `--no-ff` (`0b57669`), PR [#1](https://github.com/mauriciogonzales98/GestionGastos-daw/pull/1) mergeado — 2026-08-17 |
+| FEAT-001b | Filtros del listado, edición y eliminación de movimientos | prd-FEAT-001b.md | depende de a | **activo** | — |
+| FEAT-001c | Resumen del mes con desglose por categoría | prd-FEAT-001c.md | depende de a y de b | pendiente | — |
+
+> **FEAT-001b arranca desde `main`**, que ya tiene el modelo de datos, la API y el frontend de `a`.
+>
+> **Deuda que hereda de FEAT-001a**, con ubicación exacta en la sección "Errata" y en los WARNINGs de
+> `docs/daw/reports/verify-FEAT-001a.md`:
+> - **Diez correcciones a `spec-FEAT-001a.md`** que hay que aplicar en el PLAN de `b`, porque desde
+>   CODE y VERIFY la fase PLAN es inalcanzable (el grafo de transiciones no tiene esas aristas). Las
+>   tres que importan: la spec contradice a ADR-002 sobre la cadena de tests, su "API contract" del
+>   POST no documenta `tipoEsperado` —y `b` **consume ese contrato**—, y describe un test como "de
+>   punta a punta" cuando no lo es, que fue el defecto que costó una ronda de verificación.
+> - **Tres arreglos chicos de código**, candidatos para el arranque: un mutante sobreviviente en
+>   `leerProblema` (`cliente.ts:113-117`), el parámetro `AbortSignal` que ningún llamador pasa
+>   (`cliente.ts:49,53`), y una cuarta copia del helper `json` en `cliente.test.ts:19`.
+> - **Cualquier test de ordenamiento necesita doble capa.** El índice
+>   `(usuario_id, fecha DESC, id DESC)` hace que MySQL devuelva el orden correcto aunque la consulta
+>   no lo pida, así que un test conductual da verde con el `ORDER BY` borrado. Los dos tests de orden
+>   de `a` asertan además sobre el SQL que EF emite, vía `Tests/Infra/ObservadorDeSql.cs`.
+> - **El filtro global de EF protege las lecturas, no las escrituras.** No aplica a INSERT: cada
+>   bloque que escriba movimientos tiene que asignar el propietario desde `IUsuarioActual` a mano.
 
 ## Orden de implementación sugerido
 

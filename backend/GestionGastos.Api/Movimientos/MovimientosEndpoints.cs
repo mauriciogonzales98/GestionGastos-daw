@@ -15,9 +15,17 @@ public static class MovimientosEndpoints
     /// </summary>
     public const string TituloNoEncontrado = "Movimiento no encontrado";
 
+    /// <summary>
+    /// Techo de filas del listado (mitigación R-07). La paginación está fuera de alcance por PRD y
+    /// FEAT-001b la reemplaza por el filtro del mes actual; hasta entonces un listado sin límite es
+    /// un vector de degradación gratuito.
+    /// </summary>
+    public const int TechoDeItems = 500;
+
     public static IEndpointRouteBuilder MapMovimientosEndpoints(this IEndpointRouteBuilder rutas)
     {
         rutas.MapPost("/api/movimientos", CrearAsync).WithName("CrearMovimiento");
+        rutas.MapGet("/api/movimientos", ListarAsync).WithName("ListarMovimientos");
         rutas.MapGet("/api/movimientos/{id:int}", ObtenerPorIdAsync).WithName("ObtenerMovimiento");
         return rutas;
     }
@@ -90,6 +98,61 @@ public static class MovimientosEndpoints
             movimiento.Nota);
 
         return TypedResults.Created($"/api/movimientos/{movimiento.Id}", dto);
+    }
+
+    /// <summary>
+    /// Listado del propietario. No recibe parámetros: los filtros llegan en FEAT-001b y hasta
+    /// entonces cualquier query string se ignora en vez de rechazarse.
+    /// </summary>
+    /// <remarks>
+    /// Devuelve un único resultado tipado y no un <c>Results&lt;…&gt;</c> porque el contrato tiene
+    /// un solo desenlace propio: una lista vacía es un 200 válido, no un 404. El fallo de base no es
+    /// un segundo desenlace de este handler — se propaga al manejador global, que lo convierte en
+    /// <c>ProblemDetails</c> 500.
+    /// </remarks>
+    private static async Task<Ok<ListadoMovimientosResponse>> ListarAsync(
+        AppDbContext datos,
+        CancellationToken cancelacion)
+    {
+        // Sin cláusula de propietario: la aplica el filtro global (mitigación R-03).
+        var consulta = datos.Movimientos.AsNoTracking();
+
+        // El total se cuenta aparte y sobre TODO lo del propietario: con recorte, el techo hace que
+        // la cantidad de items ya no sirva para contar.
+        var total = await consulta.CountAsync(cancelacion);
+
+        var movimientos = await consulta
+            // El desempate por id evita que dos movimientos del mismo día salgan en orden distinto
+            // entre llamadas, y es lo que vuelve determinista cuál queda afuera del techo.
+            .OrderByDescending(m => m.Fecha)
+            .ThenByDescending(m => m.Id)
+            .Take(TechoDeItems)
+            .Select(m => new
+            {
+                m.Id,
+                m.Tipo,
+                CategoriaId = m.Categoria!.Id,
+                CategoriaNombre = m.Categoria!.Nombre,
+                m.Monto,
+                m.Moneda,
+                m.Fecha,
+                m.Nota,
+            })
+            .ToListAsync(cancelacion);
+
+        var items = movimientos
+            .Select(m => ADto(
+                m.Id,
+                m.Tipo,
+                m.CategoriaId,
+                m.CategoriaNombre,
+                m.Monto,
+                m.Moneda,
+                m.Fecha,
+                m.Nota))
+            .ToList();
+
+        return TypedResults.Ok(new ListadoMovimientosResponse(items, total > TechoDeItems, total));
     }
 
     private static async Task<Results<Ok<MovimientoDto>, ProblemHttpResult>> ObtenerPorIdAsync(

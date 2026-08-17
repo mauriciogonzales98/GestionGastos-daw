@@ -71,11 +71,7 @@ export function ListadoMovimientos({ version }: PropsListadoMovimientos) {
   return (
     <section>
       <h2>Movimientos</h2>
-      {recortado && (
-        <p className="aviso-recorte">
-          Se muestran los 500 movimientos más recientes.
-        </p>
-      )}
+      {recortado && <p className="aviso-recorte">Se muestran los 500 movimientos más recientes.</p>}
       <table>
         <thead>
           <tr>

@@ -30,6 +30,17 @@ public static class ValidadorMovimiento
 
     public const string FormatoDeFecha = "yyyy-MM-dd";
 
+    /// <summary>
+    /// Primera fecha que el tipo <c>DATE</c> de MySQL admite. <c>DateOnly</c> arranca en
+    /// <c>0001-01-01</c>, así que hay un rango que parsea acá y que la base rechaza: sin este límite
+    /// la solicitud llega al INSERT y el error del proveedor sale como 500, donde el contrato promete
+    /// 400.
+    /// </summary>
+    public static readonly DateOnly FechaMinima = new(1000, 1, 1);
+
+    /// <summary>Última fecha que el tipo <c>DATE</c> de MySQL admite.</summary>
+    public static readonly DateOnly FechaMaxima = new(9999, 12, 31);
+
     public static ResultadoValidacion Validar(CrearMovimientoRequest solicitud, out DatosDeMovimiento? datos)
     {
         var resultado = new ResultadoValidacion();
@@ -112,6 +123,15 @@ public static class ValidadorMovimiento
         if (!DateOnly.TryParseExact(fecha, FormatoDeFecha, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parseada))
         {
             resultado.Agregar("fecha", $"La fecha debe tener formato {FormatoDeFecha}");
+            return null;
+        }
+
+        if (parseada < FechaMinima || parseada > FechaMaxima)
+        {
+            resultado.Agregar(
+                "fecha",
+                $"La fecha debe estar entre {FechaMinima.ToString(FormatoDeFecha, CultureInfo.InvariantCulture)} " +
+                $"y {FechaMaxima.ToString(FormatoDeFecha, CultureInfo.InvariantCulture)}");
             return null;
         }
 

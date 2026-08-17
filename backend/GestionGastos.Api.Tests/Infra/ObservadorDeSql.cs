@@ -44,11 +44,7 @@ public static class ObservadorDeSql
         using var respuesta = await cliente.GetAsync(ruta);
 
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        var cuerpo = await respuesta.Content.ReadAsStringAsync();
-        // Clone: el JsonDocument se descarta al salir y el elemento quedaría apuntando a memoria
-        // devuelta al pool.
-        using var documento = JsonDocument.Parse(cuerpo);
-        return documento.RootElement.Clone();
+        return await JsonDeRespuesta.LeerAsync(respuesta);
     }
 
     /// <summary>

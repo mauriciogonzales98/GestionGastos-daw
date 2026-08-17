@@ -1,0 +1,6 @@
+# Generado, no escrito: formatearlo no es una decisión de estilo y hace fallar `pnpm format` con
+# ruido que nadie puede arreglar editando código.
+dist/
+coverage/
+node_modules/
+pnpm-lock.yaml

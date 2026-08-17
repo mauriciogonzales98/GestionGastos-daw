@@ -50,21 +50,13 @@ public sealed class ConfiguracionTests
 
         // WebApplicationFactory invoca el entry point por reflexión, así que la excepción llega
         // envuelta: lo que importa es que la causa sea la nuestra y no un fallo posterior.
-        var causa = Desenrollar(excepcion)
+        var causa = Excepciones.Desenrollar(excepcion)
             .OfType<InvalidOperationException>()
             .FirstOrDefault(e => e.Message.Contains("ConnectionStrings", StringComparison.Ordinal));
 
         Assert.NotNull(causa);
         Assert.Contains("user-secrets", causa.Message, StringComparison.Ordinal);
         Assert.Contains("ConnectionStrings__Default", causa.Message, StringComparison.Ordinal);
-    }
-
-    private static IEnumerable<Exception> Desenrollar(Exception excepcion)
-    {
-        for (var actual = excepcion; actual is not null; actual = actual.InnerException)
-        {
-            yield return actual;
-        }
     }
 
     [Fact]

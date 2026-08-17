@@ -156,7 +156,7 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
         var idAjeno = await SembrarDeOtroPropietarioAsync();
 
         // La fila ajena está en la tabla: sin esto, el test daría verde con la base vacía.
-        Assert.Equal(2, await CantidadDeMovimientosAsync());
+        Assert.Equal(2, await MovimientosEnLaBase.CantidadAsync());
 
         var listado = await ListarAsync();
 
@@ -178,7 +178,7 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
     public async Task Listar_SinMovimientos_DevuelveListaVaciaNo404()
     {
         await baseDeDatos.LimpiarAsync();
-        Assert.Equal(0, await CantidadDeMovimientosAsync());
+        Assert.Equal(0, await MovimientosEnLaBase.CantidadAsync());
 
         await using var fabrica = new ApiFactory();
         using var cliente = fabrica.CreateClient();
@@ -186,7 +186,7 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
 
         // Cero movimientos es una respuesta válida, nunca un error.
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        var listado = await LeerJsonAsync(respuesta);
+        var listado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Empty(Items(listado));
         Assert.False(listado.GetProperty("recortado").GetBoolean());
         Assert.Equal(0, listado.GetProperty("total").GetInt32());
@@ -269,11 +269,10 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
         // Correlación: sin esto el test daría verde con cualquier 500 de otra causa.
         Assert.Contains(
             fabrica.ExcepcionesRegistradas,
-            e => Desenrollar(e).OfType<MySqlException>().Any());
+            e => Excepciones.Desenrollar(e).OfType<MySqlException>().Any());
 
         var cuerpo = await respuesta.Content.ReadAsStringAsync();
-        using var documento = JsonDocument.Parse(cuerpo);
-        Assert.True(documento.RootElement.TryGetProperty("traceId", out var traceId));
+        Assert.True(JsonDeRespuesta.Raiz(cuerpo).TryGetProperty("traceId", out var traceId));
         Assert.False(string.IsNullOrWhiteSpace(traceId.GetString()));
 
         Assert.DoesNotContain("stackTrace", cuerpo, StringComparison.OrdinalIgnoreCase);
@@ -296,7 +295,7 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
         // Los filtros llegan en FEAT-001b: hasta entonces se ignoran, no se rechaza la petición ni
         // se recorta el listado.
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        var listado = await LeerJsonAsync(respuesta);
+        var listado = await JsonDeRespuesta.LeerAsync(respuesta);
         var items = Items(listado);
         Assert.Equal(2, items.Count);
         Assert.Equal(
@@ -307,15 +306,6 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
 
     // ---------------------------------------------------------------- utilidades
 
-    private static async Task<JsonElement> LeerJsonAsync(HttpResponseMessage respuesta)
-    {
-        var cuerpo = await respuesta.Content.ReadAsStringAsync();
-        // Clone: el JsonDocument se descarta al salir y el elemento quedaría apuntando a memoria
-        // devuelta al pool.
-        using var documento = JsonDocument.Parse(cuerpo);
-        return documento.RootElement.Clone();
-    }
-
     private static async Task<JsonElement> ListarAsync()
     {
         await using var fabrica = new ApiFactory();
@@ -323,7 +313,7 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
         using var respuesta = await cliente.GetAsync(Ruta);
 
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        return await LeerJsonAsync(respuesta);
+        return await JsonDeRespuesta.LeerAsync(respuesta);
     }
 
     /// <summary>Cláusula <c>ORDER BY</c> que el listado emitió en el request observado.</summary>
@@ -370,6 +360,12 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
         return movimientos.Select(m => m.Id).ToList();
     }
 
+    /// <summary>
+    /// Siembra un movimiento de OTRO usuario, para verificar que el listado no lo devuelve. No hace
+    /// falta publicar <c>UsuarioActualId</c>: el filtro global se aplica a las consultas, no a los
+    /// INSERT, y el propietario se fija a mano acá (misma afirmación que en
+    /// <c>CrearMovimientoTests</c>).
+    /// </summary>
     private async Task<int> SembrarDeOtroPropietarioAsync()
     {
         await using var contexto = baseDeDatos.CrearContexto();
@@ -377,32 +373,11 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
         contexto.Usuarios.Add(otro);
         await contexto.SaveChangesAsync();
 
-        contexto.UsuarioActualId = otro.Id;
         var ajeno = NuevoMovimiento(TipoMovimiento.Gasto, CategoriaComidaId, 999m, new DateOnly(2026, 12, 31), "ajeno");
         ajeno.UsuarioId = otro.Id;
         contexto.Movimientos.Add(ajeno);
         await contexto.SaveChangesAsync();
         return ajeno.Id;
-    }
-
-    /// <summary>
-    /// Cuenta la tabla entera, sin el filtro global de propietario. SQL constante, sin
-    /// interpolación de nada que venga de afuera (mitigación R-05).
-    /// </summary>
-    private static async Task<int> CantidadDeMovimientosAsync()
-    {
-        await using var conexion = new MySqlConnection(BaseDeDatosFixture.CadenaDeConexion);
-        await conexion.OpenAsync();
-        await using var comando = new MySqlCommand("SELECT COUNT(*) FROM movimientos", conexion);
-        return Convert.ToInt32(await comando.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
-    }
-
-    private static IEnumerable<Exception> Desenrollar(Exception excepcion)
-    {
-        for (var actual = excepcion; actual is not null; actual = actual.InnerException)
-        {
-            yield return actual;
-        }
     }
 }
 

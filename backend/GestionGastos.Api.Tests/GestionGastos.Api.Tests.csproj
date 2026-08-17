@@ -8,6 +8,12 @@
     <IsTestProject>true</IsTestProject>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RootNamespace>GestionGastos.Api.Tests</RootNamespace>
+    <!--
+      Para que la exclusión de Migrations/ valga sin acordarse de pasar la opción "settings" a mano en
+      cada corrida: `dotnet test` toma este archivo solo, y el gate de cobertura lee el número que
+      corresponde.
+    -->
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)/coverlet.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 
   <ItemGroup>

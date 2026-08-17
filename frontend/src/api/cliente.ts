@@ -51,10 +51,7 @@ export async function obtenerCategorias(senal?: AbortSignal): Promise<CategoriaD
 }
 
 export async function obtenerMovimientos(senal?: AbortSignal): Promise<ListadoMovimientosResponse> {
-  return await pedir<ListadoMovimientosResponse>(
-    '/movimientos',
-    senal ? { signal: senal } : {},
-  );
+  return await pedir<ListadoMovimientosResponse>('/movimientos', senal ? { signal: senal } : {});
 }
 
 export async function crearMovimiento(entrada: CrearMovimientoRequest): Promise<MovimientoDto> {

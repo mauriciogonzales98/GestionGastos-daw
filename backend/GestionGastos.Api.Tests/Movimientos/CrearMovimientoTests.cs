@@ -36,7 +36,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
 
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         var id = creado.GetProperty("id").GetInt32();
         Assert.True(id > 0);
         Assert.Equal($"/api/movimientos/{id}", respuesta.Headers.Location?.ToString());
@@ -69,7 +69,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
 
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Equal("ingreso", creado.GetProperty("tipo").GetString());
         Assert.Equal("Sueldo", creado.GetProperty("categoria").GetProperty("nombre").GetString());
 
@@ -89,7 +89,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         using var respuesta = await cliente.PostAsync("/api/movimientos", CuerpoValido());
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
 
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Equal("ARS", creado.GetProperty("moneda").GetString());
         Assert.Equal(Moneda.Predeterminada, creado.GetProperty("moneda").GetString());
 
@@ -110,7 +110,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             Cuerpo(new { categoriaId = CategoriaComidaId, monto = 10m, fecha = FechaValida, nota }));
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Equal(nota, creado.GetProperty("nota").GetString());
 
         var persistido = await UnicoMovimientoAsync();
@@ -133,7 +133,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             Cuerpo(new { categoriaId = CategoriaComidaId, monto = 10m, fecha = FechaValida, nota }));
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Equal(JsonValueKind.Null, creado.GetProperty("nota").ValueKind);
 
         var persistido = await UnicoMovimientoAsync();
@@ -161,7 +161,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             }));
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Equal("ingreso", creado.GetProperty("tipo").GetString());
 
         var persistido = await UnicoMovimientoAsync();
@@ -194,12 +194,12 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             }));
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.NotEqual(4242, creado.GetProperty("id").GetInt32());
 
         // El propietario sale de IUsuarioActual, nunca del cuerpo: se lee sin el filtro global, con
         // SQL constante, porque justamente lo que se verifica es a quién quedó asignada la fila.
-        var propietarios = await PropietariosDeLosMovimientosAsync();
+        var propietarios = await MovimientosEnLaBase.PropietariosAsync();
         var propietario = Assert.Single(propietarios);
         Assert.Equal(usuarioSemillaId, propietario);
         Assert.NotEqual(otroUsuarioId, propietario);
@@ -224,7 +224,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             }));
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Equal("ARS", creado.GetProperty("moneda").GetString());
 
         var persistido = await UnicoMovimientoAsync();
@@ -284,7 +284,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             Cuerpo(new { categoriaId = CategoriaComidaId, monto = 9999999999999.99m, fecha = FechaValida, nota = (string?)null }));
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
-        var creado = await LeerJsonAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.Equal(9999999999999.99m, creado.GetProperty("monto").GetDecimal());
 
         var persistido = await UnicoMovimientoAsync();
@@ -323,7 +323,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             $"Se esperaba un error en 'monto'; llegaron: {string.Join(", ", errores.Keys)}");
         Assert.Contains("El monto es obligatorio y debe ser un número", errores["monto"]);
 
-        Assert.Equal(0, await CantidadDeMovimientosAsync());
+        Assert.Equal(0, await MovimientosEnLaBase.CantidadAsync());
     }
 
     // Las tres formas de "sin categoría" que llegan de un formulario: el campo que no viaja, el que
@@ -371,7 +371,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         Assert.DoesNotContain(
             fabrica.ExcepcionesRegistradas,
             e => e is DbUpdateException || e.InnerException is MySqlException);
-        Assert.Equal(0, await CantidadDeMovimientosAsync());
+        Assert.Equal(0, await MovimientosEnLaBase.CantidadAsync());
     }
 
     [Fact]
@@ -389,6 +389,113 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             },
             "categoriaId",
             "La categoría 'Sueldo' es de tipo ingreso y no puede usarse en un movimiento de tipo gasto");
+
+    [Fact]
+    public Task Crear_TipoCruzadoEnLaDireccionInversa_Devuelve400() =>
+        // La otra mitad de AC-10, que el PRD nombra en las dos direcciones: el formulario pide un
+        // ingreso y manda una categoría de gasto. Sin este test, invertir la comparación del endpoint
+        // dejaba media regla sin vigilar.
+        RechazaConErrorAsync(
+            new
+            {
+                categoriaId = CategoriaComidaId,
+                tipoEsperado = "ingreso",
+                monto = 10m,
+                fecha = FechaValida,
+                nota = (string?)null,
+            },
+            "categoriaId",
+            "La categoría 'Comida' es de tipo gasto y no puede usarse en un movimiento de tipo ingreso");
+
+    // El campo se compara pero no se persiste: un valor que no es ninguno de los dos tipos es un
+    // error de formato del propio campo, y va bajo su propia clave.
+    [Theory]
+    [InlineData("transferencia")]
+    [InlineData("gastos")]
+    [InlineData("0")]
+    public Task Crear_TipoEsperadoInvalido_Devuelve400(string tipoEsperado) =>
+        RechazaConErrorAsync(
+            new
+            {
+                categoriaId = CategoriaComidaId,
+                tipoEsperado,
+                monto = 10m,
+                fecha = FechaValida,
+                nota = (string?)null,
+            },
+            "tipoEsperado",
+            "El tipo debe ser gasto o ingreso");
+
+    [Theory]
+    [InlineData("GASTO")]
+    [InlineData("Gasto")]
+    [InlineData("  gasto  ")]
+    public async Task Crear_TipoEsperadoConOtraCajaOEspacios_LoAcepta(string tipoEsperado)
+    {
+        await baseDeDatos.LimpiarAsync();
+        await using var fabrica = new ApiFactory();
+        using var cliente = fabrica.CreateClient();
+
+        // La tolerancia es deliberada: `TipoMovimientoTexto.TryParse` normaliza con
+        // `Trim().ToLowerInvariant()`. Sin este test, endurecer el parseo dejaría el rechazo de un
+        // valor válido tapado por el test de arriba, que solo mira los inválidos.
+        using var respuesta = await cliente.PostAsync(
+            "/api/movimientos",
+            Cuerpo(new
+            {
+                categoriaId = CategoriaComidaId,
+                tipoEsperado,
+                monto = 10m,
+                fecha = FechaValida,
+                nota = (string?)null,
+            }));
+
+        Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
+        // El campo no se persiste: solo se compara contra el tipo de la categoría.
+        Assert.Equal(TipoMovimiento.Gasto, (await UnicoMovimientoAsync()).Tipo);
+    }
+
+    [Fact]
+    public Task Crear_CategoriaIdNegativo_Devuelve400() =>
+        // Rama propia del validador: el 0 es "sin elegir" y da "obligatoria", pero un id negativo no
+        // puede existir y se rechaza como inexistente sin llegar a consultar la base.
+        RechazaConErrorAsync(
+            new { categoriaId = -1, monto = 10m, fecha = FechaValida, nota = (string?)null },
+            "categoriaId",
+            "La categoría no existe");
+
+    // Rango, no formato: los tres parsean como DateOnly y ninguno entra en el DATE de MySQL, que
+    // arranca en 1000-01-01. Sin la validación llegarían al INSERT y el 400 del contrato saldría
+    // como 500.
+    [Theory]
+    [InlineData("0001-01-01")]
+    [InlineData("0999-12-31")]
+    public Task Crear_FechaFueraDelRangoDeLaBase_Devuelve400(string fecha) =>
+        RechazaConErrorAsync(
+            new { categoriaId = CategoriaComidaId, monto = 10m, fecha, nota = (string?)null },
+            "fecha",
+            "La fecha debe estar entre 1000-01-01 y 9999-12-31");
+
+    [Theory]
+    [InlineData("1000-01-01")]
+    [InlineData("9999-12-31")]
+    public async Task Crear_FechaEnLosBordesDelRango_Devuelve201(string fecha)
+    {
+        await baseDeDatos.LimpiarAsync();
+        await using var fabrica = new ApiFactory();
+        using var cliente = fabrica.CreateClient();
+
+        // Los límites son inclusivos: el rango excluye lo que la base no puede guardar, no un año
+        // más por las dudas.
+        using var respuesta = await cliente.PostAsync(
+            "/api/movimientos",
+            Cuerpo(new { categoriaId = CategoriaComidaId, monto = 10m, fecha, nota = (string?)null }));
+
+        Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
+        var creado = await JsonDeRespuesta.LeerAsync(respuesta);
+        Assert.Equal(fecha, creado.GetProperty("fecha").GetString());
+        Assert.Equal(fecha, (await UnicoMovimientoAsync()).Fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+    }
 
     [Fact]
     public Task Crear_NotaDeCientoVeintiuno_Devuelve400() =>
@@ -433,7 +540,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             Assert.DoesNotContain(detalleInterno, cuerpo, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.Equal(0, await CantidadDeMovimientosAsync());
+        Assert.Equal(0, await MovimientosEnLaBase.CantidadAsync());
     }
 
     [Fact]
@@ -464,7 +571,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             Assert.NotEmpty(errores);
             // La tabla entera, sin filtro de propietario: "no se crea ningún movimiento" es de toda
             // la tabla, no solo de lo que el usuario actual ve.
-            Assert.Equal(0, await CantidadDeMovimientosAsync());
+            Assert.Equal(0, await MovimientosEnLaBase.CantidadAsync());
         }
     }
 
@@ -486,8 +593,8 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         using var respuesta = await cliente.GetAsync(ubicacion);
 
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        var leido = await LeerJsonAsync(respuesta);
-        var creado = await LeerJsonAsync(creacion);
+        var leido = await JsonDeRespuesta.LeerAsync(respuesta);
+        var creado = await JsonDeRespuesta.LeerAsync(creacion);
         Assert.Equal(creado.GetProperty("id").GetInt32(), leido.GetProperty("id").GetInt32());
         Assert.Equal("gasto", leido.GetProperty("tipo").GetString());
         Assert.Equal("Comida", leido.GetProperty("categoria").GetProperty("nombre").GetString());
@@ -518,7 +625,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
     {
         await baseDeDatos.LimpiarAsync();
         var idAjeno = await SembrarMovimientoDeOtroPropietarioAsync();
-        Assert.Equal(1, await CantidadDeMovimientosAsync());
+        Assert.Equal(1, await MovimientosEnLaBase.CantidadAsync());
 
         await using var fabrica = new ApiFactory();
         using var cliente = fabrica.CreateClient();
@@ -532,7 +639,7 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         Assert.DoesNotContain("otro@gestiongastos.local", cuerpo, StringComparison.Ordinal);
         // Sobre la propiedad y no sobre la cadena: buscar el monto ajeno como subcadena chocaría con
         // el traceId hexadecimal del ProblemDetails y haría fallar el test sin que nada esté roto.
-        var raiz = await LeerJsonAsync(respuesta);
+        var raiz = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.False(
             raiz.TryGetProperty("monto", out _),
             "El ProblemDetails del 404 no debe filtrar el monto del movimiento ajeno.");
@@ -563,11 +670,10 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         // Correlación: sin esto el test daría verde con cualquier 500 de otra causa.
         Assert.Contains(
             fabrica.ExcepcionesRegistradas,
-            e => Desenrollar(e).OfType<MySqlException>().Any());
+            e => Excepciones.Desenrollar(e).OfType<MySqlException>().Any());
 
         var cuerpo = await respuesta.Content.ReadAsStringAsync();
-        using var documento = JsonDocument.Parse(cuerpo);
-        Assert.True(documento.RootElement.TryGetProperty("traceId", out var traceId));
+        Assert.True(JsonDeRespuesta.Raiz(cuerpo).TryGetProperty("traceId", out var traceId));
         Assert.False(string.IsNullOrWhiteSpace(traceId.GetString()));
 
         Assert.DoesNotContain("stackTrace", cuerpo, StringComparison.OrdinalIgnoreCase);
@@ -590,29 +696,20 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
     private static StringContent CuerpoValido() =>
         Cuerpo(new { categoriaId = CategoriaComidaId, monto = 10m, fecha = FechaValida, nota = (string?)null });
 
-    private static async Task<JsonElement> LeerJsonAsync(HttpResponseMessage respuesta)
-    {
-        var cuerpo = await respuesta.Content.ReadAsStringAsync();
-        // Clone: el JsonDocument se descarta al salir y el elemento quedaría apuntando a memoria
-        // devuelta al pool.
-        using var documento = JsonDocument.Parse(cuerpo);
-        return documento.RootElement.Clone();
-    }
-
     /// <summary>
     /// El 404 lo produce el endpoint, con su propio título, y no el ruteo por falta de ruta: los dos
     /// devuelven 404 <c>problem+json</c> y sin distinguirlos el test no vigila nada.
     /// </summary>
     private static async Task AssertTituloDeNoEncontradoAsync(HttpResponseMessage respuesta)
     {
-        var raiz = await LeerJsonAsync(respuesta);
+        var raiz = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.True(raiz.TryGetProperty("title", out var titulo), "El ProblemDetails no trae 'title'.");
         Assert.Equal("Movimiento no encontrado", titulo.GetString());
     }
 
     private static async Task<Dictionary<string, string[]>> ErroresDeAsync(HttpResponseMessage respuesta)
     {
-        var raiz = await LeerJsonAsync(respuesta);
+        var raiz = await JsonDeRespuesta.LeerAsync(respuesta);
         Assert.True(raiz.TryGetProperty("errors", out var errores), "El ProblemDetails no trae la extensión 'errors'.");
         return errores.EnumerateObject().ToDictionary(
             p => p.Name,
@@ -620,7 +717,13 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
             StringComparer.Ordinal);
     }
 
-    private async Task RechazaConErrorAsync(object carga, string campo, string? mensajeEsperado = null)
+    /// <summary>
+    /// Manda una carga inválida y verifica el 400, el campo del error y el mensaje exacto.
+    /// <paramref name="mensajeEsperado"/> es OBLIGATORIO a propósito: cuando era opcional un test
+    /// quedó afirmando solo "hay algún error en este campo", que da verde con el mensaje de otra
+    /// regla.
+    /// </summary>
+    private async Task RechazaConErrorAsync(object carga, string campo, string mensajeEsperado)
     {
         await baseDeDatos.LimpiarAsync();
         await using var fabrica = new ApiFactory();
@@ -635,12 +738,9 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         Assert.True(errores.ContainsKey(campo), $"Se esperaba un error en '{campo}'; llegaron: {string.Join(", ", errores.Keys)}");
         Assert.NotEmpty(errores[campo]);
         Assert.All(errores[campo], m => Assert.False(string.IsNullOrWhiteSpace(m)));
-        if (mensajeEsperado is not null)
-        {
-            Assert.Contains(mensajeEsperado, errores[campo]);
-        }
+        Assert.Contains(mensajeEsperado, errores[campo]);
 
-        Assert.Equal(0, await CantidadDeMovimientosAsync());
+        Assert.Equal(0, await MovimientosEnLaBase.CantidadAsync());
     }
 
     private async Task<Movimiento> UnicoMovimientoAsync()
@@ -665,6 +765,11 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         return otro.Id;
     }
 
+    /// <summary>
+    /// No publica <c>UsuarioActualId</c>: el filtro global se aplica a las consultas, no a los
+    /// INSERT, y el propietario se fija a mano acá (misma afirmación que en
+    /// <c>ListarMovimientosTests</c>).
+    /// </summary>
     private async Task<int> SembrarMovimientoDeOtroPropietarioAsync()
     {
         var otroUsuarioId = await SembrarOtroUsuarioAsync();
@@ -684,38 +789,4 @@ public sealed class CrearMovimientoTests(BaseDeDatosFixture baseDeDatos)
         return ajeno.Id;
     }
 
-    /// <summary>
-    /// Cuenta la tabla entera, sin el filtro global de propietario. SQL constante, sin
-    /// interpolación de nada que venga de afuera (mitigación R-05).
-    /// </summary>
-    private static async Task<int> CantidadDeMovimientosAsync()
-    {
-        await using var conexion = new MySqlConnection(BaseDeDatosFixture.CadenaDeConexion);
-        await conexion.OpenAsync();
-        await using var comando = new MySqlCommand("SELECT COUNT(*) FROM movimientos", conexion);
-        return Convert.ToInt32(await comando.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
-    }
-
-    private static async Task<IReadOnlyList<int>> PropietariosDeLosMovimientosAsync()
-    {
-        await using var conexion = new MySqlConnection(BaseDeDatosFixture.CadenaDeConexion);
-        await conexion.OpenAsync();
-        await using var comando = new MySqlCommand("SELECT usuario_id FROM movimientos", conexion);
-        var propietarios = new List<int>();
-        await using var lector = await comando.ExecuteReaderAsync();
-        while (await lector.ReadAsync())
-        {
-            propietarios.Add(lector.GetInt32(0));
-        }
-
-        return propietarios;
-    }
-
-    private static IEnumerable<Exception> Desenrollar(Exception excepcion)
-    {
-        for (var actual = excepcion; actual is not null; actual = actual.InnerException)
-        {
-            yield return actual;
-        }
-    }
 }

@@ -29,6 +29,15 @@ public sealed class RendimientoAltaTests(BaseDeDatosFixture baseDeDatos)
         await baseDeDatos.LimpiarAsync();
         await SembrarMovimientosAsync();
 
+        // El sembrado es la premisa de la medición, no un detalle del arreglo: si las filas no
+        // quedaron, el p95 se mide contra una tabla chica y el test da verde sin haber probado
+        // NFR-01. Falla acá, con el número real, en vez de mentir más abajo.
+        var sembradas = await MovimientosEnLaBase.CantidadAsync();
+        Assert.True(
+            sembradas == MovimientosSembrados,
+            $"El sembrado dejó {sembradas} movimientos y la medición necesita {MovimientosSembrados}: " +
+            "sin la tabla poblada el p95 no dice nada del costo real del índice.");
+
         await using var fabrica = new ApiFactory();
         using var cliente = fabrica.CreateClient();
 

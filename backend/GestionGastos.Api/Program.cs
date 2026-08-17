@@ -1,5 +1,7 @@
+using GestionGastos.Api.Categorias;
 using GestionGastos.Api.Common;
 using GestionGastos.Api.Data;
+using GestionGastos.Api.Movimientos;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,6 +33,9 @@ app.Use(async (contexto, siguiente) =>
     datos.UsuarioActualId = await usuarioActual.ObtenerIdAsync(contexto.RequestAborted);
     await siguiente();
 });
+
+app.MapCategoriasEndpoints();
+app.MapMovimientosEndpoints();
 
 app.Run();
 

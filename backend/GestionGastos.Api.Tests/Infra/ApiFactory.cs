@@ -17,8 +17,20 @@ namespace GestionGastos.Api.Tests.Infra;
 /// <c>Testing</c> a propósito: en Development la página de excepciones del desarrollador
 /// devolvería HTML con stack trace y taparía el <c>ProblemDetails</c> que hay que verificar.
 /// </summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>
+/// <param name="cadenaDeConexion">
+/// Solo para los tests que necesitan una base que no responda: pasando
+/// <see cref="CadenaHaciaUnPuertoCerrado"/> se levanta la misma API apuntando a donde no hay MySQL.
+/// Por omisión usa la cadena de la base de tests.
+/// </param>
+public sealed class ApiFactory(string? cadenaDeConexion = null) : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// Un puerto sin nada escuchando y nada más: no lleva usuario ni contraseña porque la conexión
+    /// nunca llega a autenticarse, y una credencial acá sería una credencial en el repo.
+    /// </summary>
+    public const string CadenaHaciaUnPuertoCerrado =
+        "Server=127.0.0.1;Port=3399;Database=gestiongastos_test;Connection Timeout=3";
+
     private readonly RegistroDeExcepciones _registro = new();
 
     /// <summary>
@@ -33,7 +45,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         // UseSetting y no ConfigureAppConfiguration: la cadena se lee antes de construir el host,
         // y las fuentes de configuración diferidas todavía no están cargadas en ese punto.
-        builder.UseSetting("ConnectionStrings:Default", BaseDeDatosFixture.CadenaDeConexion);
+        builder.UseSetting(
+            "ConnectionStrings:Default",
+            cadenaDeConexion ?? BaseDeDatosFixture.CadenaDeConexion);
         builder.ConfigureLogging(registro => registro.AddProvider(_registro));
         builder.ConfigureServices(servicios =>
             servicios.AddSingleton<IStartupFilter, EndpointsDePrueba>());

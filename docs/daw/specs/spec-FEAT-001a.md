@@ -83,6 +83,13 @@ Orden de ejecución: **1 → 2 → 3 → 4 → 5**.
 - `backend/GestionGastos.Api.Tests/GestionGastos.Api.Tests.csproj` (nuevo) — xUnit, `Microsoft.AspNetCore.Mvc.Testing`, `coverlet.collector`.
 - `backend/GestionGastos.Api.Tests/Infra/BaseDeDatosFixture.cs` (nuevo) — crea y migra `gestiongastos_test`, limpia entre tests.
 - `backend/GestionGastos.Api.Tests/Infra/ApiFactory.cs` (nuevo) — `WebApplicationFactory` con la cadena de test.
+- `backend/GestionGastos.Api.Tests/Infra/Excepciones.cs` (nuevo) — helpers de aserción sobre excepciones.
+- `backend/GestionGastos.Api.Tests/Infra/JsonDeRespuesta.cs` (nuevo) — lectura tipada del cuerpo JSON.
+- `backend/GestionGastos.Api.Tests/Datos/ModeloDeDatosTests.cs` (nuevo) — tipos reales de columna vía `information_schema`.
+- `backend/GestionGastos.Api.Tests/Datos/MigracionTests.cs` (nuevo) — la migración aplica sobre una base limpia.
+- `backend/GestionGastos.Api.Tests/Datos/LimpiezaDeEstadoTests.cs` (nuevo) — el fixture deja la base limpia entre tests.
+- `backend/GestionGastos.Api.Tests/AssemblyInfo.cs` (nuevo) — deshabilita la paralelización entre colecciones.
+- `backend/GestionGastos.Api.Tests/coverlet.runsettings` (nuevo) — configuración del recolector de cobertura.
 - `backend/db/README.md` (nuevo) — cómo crear la base y el usuario acotado.
 - `.gitignore` (modificado) — agrega las entradas de .NET, Node y secretos.
 
@@ -97,9 +104,11 @@ La cadena de conexión de la API se lee de user-secrets; **no existe sección `C
 ningún `appsettings*.json`**, y `Program.cs` falla al arrancar con un mensaje explícito si no la
 encuentra, en lugar de caer más tarde con un error de conexión que invita a escribirla en el archivo
 equivocado. La cadena de los tests llega por la variable de entorno
-`ConnectionStrings__Default`, con un valor por defecto apuntando a `gestiongastos_test` en
-`localhost`: con `dotnet test` los user-secrets se resuelven contra el assembly de entrada, que es el
-proyecto de tests y no la API, así que apoyarse en ellos dejaría la credencial sin domicilio
+`ConnectionStrings__Default`, y **sin ella el gate de tests falla nombrándola**: no hay valor por
+defecto (ADR-002). Un default silencioso apuntando a una base adivinada convierte un error de
+configuración en un error de autenticación tardío contra una base ajena, que es un diagnóstico peor
+que no arrancar. Con `dotnet test` los user-secrets se resuelven contra el assembly de entrada, que
+es el proyecto de tests y no la API, así que apoyarse en ellos dejaría la credencial sin domicilio
 (mitigación R-11).
 
 La API escucha exclusivamente en `127.0.0.1` (mitigación R-02): sin autenticación, el binding es el
@@ -184,7 +193,7 @@ Este bloque no acepta entrada de usuario final. La única entrada es de configur
 **Completion criterion**
 
 `dotnet build` compila sin advertencias; `dotnet ef database update` crea el esquema en
-`gestiongastos_test`; los 12 tests de arriba pasan; `information_schema` reporta
+`gestiongastos_test`; los 14 tests de arriba pasan; `information_schema` reporta
 `decimal(15,2)` para `movimientos.monto` y `date` para `movimientos.fecha`; `git status` no muestra
 `bin/`, `obj/` ni `appsettings.Development.json` como archivos sin seguimiento.
 
@@ -229,7 +238,10 @@ strings queda prohibido en todo el proyecto (mitigación R-05).
 - Auth: ninguna (RA-01, riesgo aceptado). El propietario no participa: el catálogo es global.
 
 `POST /api/movimientos`
-- Request: `{ categoriaId: int, monto: decimal, fecha: string "yyyy-MM-dd", nota: string | null }`
+- Request: `{ categoriaId: int, monto: decimal, fecha: string "yyyy-MM-dd", nota: string | null, tipoEsperado?: "gasto" | "ingreso" }`
+  `tipoEsperado` es **opcional**: se compara contra el tipo de la categoría para
+  detectar el cruce de AC-10 y **no se persiste** —el tipo del movimiento se deriva
+  siempre de la categoría elegida.
 - Response 201: `Location: /api/movimientos/{id}` + `MovimientoDto`
 - `MovimientoDto`: `{ id: int, tipo: "gasto"|"ingreso", categoria: { id: int, nombre: string }, monto: decimal, moneda: string, fecha: "yyyy-MM-dd", nota: string | null }`
 - Errores: `400` `ProblemDetails` RFC 9457 con extensión `errors` (diccionario campo → mensajes).
@@ -296,8 +308,8 @@ strings queda prohibido en todo el proyecto (mitigación R-05).
 
 **Completion criterion**
 
-Los 25 tests pasan; `POST /api/movimientos` con cuerpo válido devuelve 201 con `Location` que
-resuelve a 200; los ocho casos de rechazo devuelven 400 con `errors` poblado y dejan la tabla
+Los 26 tests listados pasan; `POST /api/movimientos` con cuerpo válido devuelve 201 con `Location` que
+resuelve a 200; los casos de rechazo listados devuelven 400 con `errors` poblado y dejan la tabla
 `movimientos` sin filas nuevas; el p95 del alta medido sobre 100 ejecuciones es menor a 1 s.
 
 ---
@@ -309,6 +321,7 @@ resuelve a 200; los ocho casos de rechazo devuelven 400 con `errors` poblado y d
 - `backend/GestionGastos.Api/Movimientos/MovimientosEndpoints.cs` (modificado) — agrega `GET /api/movimientos`.
 - `backend/GestionGastos.Api/Movimientos/ListadoMovimientosResponse.cs` (nuevo) — envoltorio con la marca de recorte.
 - `backend/GestionGastos.Api.Tests/Movimientos/ListarMovimientosTests.cs` (nuevo)
+- `backend/GestionGastos.Api.Tests/Infra/ObservadorDeSql.cs` (nuevo) — captura el SQL que EF emite. Sostiene la doble capa de los tests de ordenamiento: el índice `(usuario_id, fecha DESC, id DESC)` devuelve el orden correcto aunque la consulta no lo pida, así que un test solo conductual da verde con el `ORDER BY` borrado.
 
 **Logic**
 
@@ -362,7 +375,7 @@ cuerpo. La validación de los filtros llega con FEAT-001b.
 
 **Completion criterion**
 
-Los 8 tests pasan; `GET /api/movimientos` devuelve los movimientos del propietario en orden
+Los 10 tests pasan; `GET /api/movimientos` devuelve los movimientos del propietario en orden
 `fecha DESC, id DESC`; con 501 movimientos sembrados devuelve exactamente 500 items y
 `recortado: true`; con un movimiento de otro propietario sembrado, ese movimiento no aparece.
 
@@ -376,7 +389,7 @@ Los 8 tests pasan; `GET /api/movimientos` devuelve los movimientos del propietar
 - `frontend/pnpm-lock.yaml` (nuevo) — commiteado (mitigación R-12).
 - `frontend/vite.config.ts` (nuevo) — proxy `/api` hacia la API, config de Vitest.
 - `frontend/tsconfig.json` (nuevo) — `strict: true`.
-- `frontend/eslint.config.js` (nuevo), `frontend/.prettierrc` (nuevo)
+- `frontend/eslint.config.js` (nuevo), `frontend/.prettierrc` (nuevo), `frontend/.prettierignore` (nuevo)
 - `frontend/index.html` (nuevo)
 - `frontend/src/main.tsx` (nuevo), `frontend/src/App.tsx` (nuevo)
 - `frontend/src/api/cliente.ts` (nuevo) — `fetch` tipado, traduce `ProblemDetails` a errores por campo.
@@ -460,6 +473,8 @@ control queda sin `<label>` asociado.
 - `frontend/src/App.tsx` (modificado) — compone formulario y listado, refresca el listado tras un alta.
 - `frontend/src/movimientos/ListadoMovimientos.test.tsx` (nuevo)
 - `frontend/src/movimientos/formato.test.ts` (nuevo)
+- `frontend/src/App.test.tsx` (nuevo) — ejerce la costura alta → listado de verdad, montando `App`. Es lo que cubre AC-05 y AC-06.
+- `frontend/src/test/infra.ts` (nuevo) — utilidades compartidas de los tests de frontend.
 
 **Logic**
 
@@ -492,7 +507,7 @@ validación aplicable es de la respuesta: `nota` puede ser `null`, y `items` pue
 - [ ] `Listado_CadaFilaMuestraLosCincoDatos` — valida AC-16.
 - [ ] `Listado_MuestraLaMonedaJuntoAlMonto` — valida AC-14.
 - [ ] `Listado_MuestraLaNota` — valida AC-11.
-- [ ] `Listado_TrasUnAlta_MuestraElMovimientoNuevo` — valida AC-05 y AC-06 de punta a punta.
+- [ ] `Listado_TrasUnAlta_MuestraElMovimientoNuevo` — el listado muestra el movimiento nuevo cuando se le vuelve a renderizar con la versión incrementada. **Simula la costura con `rerender()`, no la ejerce**: AC-05 y AC-06 los cubre `frontend/src/App.test.tsx`.
 - [ ] `Listado_NotaNula_CeldaVaciaSinRelleno` — sad path, AC-12.
 - [ ] `Listado_SinMovimientos_MuestraEstadoVacio` — sad path.
 - [ ] `Listado_ErrorDeRed_MuestraMensajeYPermiteReintentar` — sad path: el `catch` no queda silencioso.

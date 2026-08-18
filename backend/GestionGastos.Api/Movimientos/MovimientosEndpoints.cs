@@ -16,9 +16,12 @@ public static class MovimientosEndpoints
     public const string TituloNoEncontrado = "Movimiento no encontrado";
 
     /// <summary>
-    /// Techo de filas del listado (mitigación R-07). La paginación está fuera de alcance por PRD y
-    /// FEAT-001b la reemplaza por el filtro del mes actual; hasta entonces un listado sin límite es
-    /// un vector de degradación gratuito.
+    /// Techo de filas del listado (mitigaciones R-07 y R-14), que FEAT-001b conserva junto a los
+    /// filtros. Los filtros achican el universo consultado, pero no acotan nada por sí solos: son
+    /// opcionales, el default del mes actual lo pone el cliente y no el endpoint, y un rango
+    /// deliberadamente ancho vuelve a pedir la tabla entera. El techo es la única cota superior del
+    /// tamaño de la respuesta; la paginación sigue fuera de alcance por PRD, y quien queda afuera
+    /// se anuncia con <c>recortado</c>.
     /// </summary>
     public const int TechoDeItems = 500;
 
@@ -101,24 +104,58 @@ public static class MovimientosEndpoints
     }
 
     /// <summary>
-    /// Listado del propietario. No recibe parámetros: los filtros llegan en FEAT-001b y hasta
-    /// entonces cualquier query string se ignora en vez de rechazarse.
+    /// Listado del propietario, con tres filtros opcionales e independientes: categoría, fecha
+    /// desde y fecha hasta. Un parámetro ausente significa "sin ese filtro", así que sin ninguno el
+    /// endpoint devuelve todo lo del propietario, igual que en FEAT-001a. Los parámetros que la API
+    /// no conoce se siguen ignorando; los que sí conoce, si vienen mal, se rechazan.
     /// </summary>
     /// <remarks>
-    /// Devuelve un único resultado tipado y no un <c>Results&lt;…&gt;</c> porque el contrato tiene
-    /// un solo desenlace propio: una lista vacía es un 200 válido, no un 404. El fallo de base no es
-    /// un segundo desenlace de este handler — se propaga al manejador global, que lo convierte en
-    /// <c>ProblemDetails</c> 500.
+    /// Devuelve un <c>Results&lt;…&gt;</c> porque desde FEAT-001b el contrato tiene un segundo
+    /// desenlace propio: una entrada de filtro inválida es un 400 con <c>errors</c> por campo. Los
+    /// otros dos siguen sin serlo — una lista vacía es un 200 válido y no un 404, y el fallo de base
+    /// se propaga al manejador global, que lo convierte en <c>ProblemDetails</c> 500.
     /// </remarks>
-    private static async Task<Ok<ListadoMovimientosResponse>> ListarAsync(
+    private static async Task<Results<Ok<ListadoMovimientosResponse>, ValidationProblem>> ListarAsync(
+        int? categoriaId,
+        string? desde,
+        string? hasta,
         AppDbContext datos,
         CancellationToken cancelacion)
     {
+        var validacion = FiltrosDeListado.Parsear(categoriaId, desde, hasta, out var validados);
+        if (validados is not { } filtros)
+        {
+            // El listado no llega a ejecutarse: un rango invertido no se consulta y después se
+            // descarta, se rechaza antes de tocar la base.
+            return TypedResults.ValidationProblem(validacion.ComoDiccionario());
+        }
+
         // Sin cláusula de propietario: la aplica el filtro global (mitigación R-03).
         var consulta = datos.Movimientos.AsNoTracking();
 
-        // El total se cuenta aparte y sobre TODO lo del propietario: con recorte, el techo hace que
-        // la cantidad de items ya no sirva para contar.
+        // Los tres filtros se incorporan al IQueryable ANTES del CountAsync y del Take, de modo que
+        // se resuelvan en la base y nunca se materialice una fila fuera del rango (mitigación
+        // R-13). Filtrar la lista ya traída daría la misma respuesta y sería otra cosa.
+        if (filtros.CategoriaId is { } categoria)
+        {
+            consulta = consulta.Where(m => m.CategoriaId == categoria);
+        }
+
+        if (filtros.Desde is { } inicio)
+        {
+            consulta = consulta.Where(m => m.Fecha >= inicio);
+        }
+
+        if (filtros.Hasta is { } fin)
+        {
+            // Comparación entre DateOnly, sin hora de por medio: el extremo superior queda incluido
+            // (AC-10), que es donde todo filtro por rango se equivoca.
+            consulta = consulta.Where(m => m.Fecha <= fin);
+        }
+
+        // El total se cuenta aparte y sobre el universo YA FILTRADO: si contara todo lo del
+        // propietario, `recortado` mentiría con un filtro angosto (mitigación R-14). Aparte del
+        // conteo de items porque el techo hace que la cantidad devuelta ya no sirva para contar.
         var total = await consulta.CountAsync(cancelacion);
 
         var movimientos = await consulta

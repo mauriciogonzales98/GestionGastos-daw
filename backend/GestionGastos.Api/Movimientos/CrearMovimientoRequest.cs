@@ -17,13 +17,18 @@ namespace GestionGastos.Api.Movimientos;
 /// Opcional: el tipo que el cliente cree estar cargando. No se persiste — el tipo siempre sale de la
 /// categoría—, solo se compara con el de la categoría para detectar el cruce de AC-10, que de otro
 /// modo sería indetectable en el servidor.
+///
+/// Es el único campo del alta que queda FUERA de <see cref="IEntradaDeMovimiento"/>, y por eso lo
+/// valida <c>ValidadorMovimiento.ValidarTipoEsperado</c> aparte: acá es una entrada no confiable del
+/// cliente, mientras que en la modificación el tipo del movimiento ya está persistido y es confiable.
+/// Compartir un mismo miembro para los dos casos mezclaría los dos niveles de confianza.
 /// </param>
 public sealed record CrearMovimientoRequest(
     int? CategoriaId,
     [property: JsonConverter(typeof(MontoJsonConverter))] decimal? Monto,
     string? Fecha,
     string? Nota,
-    string? TipoEsperado);
+    string? TipoEsperado) : IEntradaDeMovimiento;
 
 /// <summary>
 /// Acepta únicamente números JSON que entren en un <c>decimal</c>, tal como declara el contrato, y

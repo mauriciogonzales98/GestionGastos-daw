@@ -5,15 +5,15 @@ using GestionGastos.Api.Data.Entidades;
 namespace GestionGastos.Api.Movimientos;
 
 /// <summary>
-/// Entrada del alta ya validada y convertida a los tipos del dominio. Que exista este tipo es lo que
-/// permite que el handler no vuelva a preguntarse si el monto es positivo o si la fecha parsea.
+/// Entrada de un movimiento ya validada y convertida a los tipos del dominio, la misma para el alta
+/// y para la modificación. Que exista este tipo es lo que permite que el handler no vuelva a
+/// preguntarse si el monto es positivo o si la fecha parsea.
 /// </summary>
 public sealed record DatosDeMovimiento(
     int CategoriaId,
     decimal Monto,
     DateOnly Fecha,
-    string? Nota,
-    TipoMovimiento? TipoEsperado);
+    string? Nota);
 
 /// <summary>
 /// Validación a mano, sin dependencias nuevas. No lanza excepciones para el flujo esperado: devuelve
@@ -41,7 +41,12 @@ public static class ValidadorMovimiento
     /// <summary>Última fecha que el tipo <c>DATE</c> de MySQL admite.</summary>
     public static readonly DateOnly FechaMaxima = new(9999, 12, 31);
 
-    public static ResultadoValidacion Validar(CrearMovimientoRequest solicitud, out DatosDeMovimiento? datos)
+    /// <summary>
+    /// Las cuatro reglas que el alta y la modificación comparten, sobre la interfaz común y no sobre
+    /// un tipo concreto: una sola implementación, imposible de dejar atrás en uno de los dos
+    /// endpoints (mitigación R-16).
+    /// </summary>
+    public static ResultadoValidacion Validar(IEntradaDeMovimiento solicitud, out DatosDeMovimiento? datos)
     {
         var resultado = new ResultadoValidacion();
 
@@ -49,7 +54,6 @@ public static class ValidadorMovimiento
         var monto = ValidarMonto(solicitud.Monto, resultado);
         var fecha = ValidarFecha(solicitud.Fecha, resultado);
         var nota = ValidarNota(solicitud.Nota, resultado);
-        var tipoEsperado = ValidarTipoEsperado(solicitud.TipoEsperado, resultado);
 
         if (!resultado.EsValido)
         {
@@ -57,9 +61,30 @@ public static class ValidadorMovimiento
             return resultado;
         }
 
-        datos = new DatosDeMovimiento(categoriaId!.Value, monto!.Value, fecha!.Value, nota, tipoEsperado);
+        datos = new DatosDeMovimiento(categoriaId!.Value, monto!.Value, fecha!.Value, nota);
         return resultado;
     }
+
+    /// <summary>
+    /// El rechazo por categoría inexistente, redactado en un solo lugar para que el alta y la
+    /// modificación no puedan responder cosas distintas ante lo mismo.
+    /// </summary>
+    public static ResultadoValidacion CategoriaInexistente() =>
+        new ResultadoValidacion().Agregar("categoriaId", "La categoría no existe");
+
+    /// <summary>
+    /// El rechazo por tipo cruzado. En el alta el tipo del movimiento lo aporta <c>tipoEsperado</c>;
+    /// en la modificación sale de la fila persistida. El mensaje nombra los dos tipos porque, sin
+    /// eso, "no puede usarse" no dice qué corregir.
+    /// </summary>
+    public static ResultadoValidacion TipoCruzado(
+        string nombreDeLaCategoria,
+        TipoMovimiento tipoDeLaCategoria,
+        TipoMovimiento tipoDelMovimiento) =>
+        new ResultadoValidacion().Agregar(
+            "categoriaId",
+            $"La categoría '{nombreDeLaCategoria}' es de tipo {TipoMovimientoTexto.Nombre(tipoDeLaCategoria)} " +
+            $"y no puede usarse en un movimiento de tipo {TipoMovimientoTexto.Nombre(tipoDelMovimiento)}");
 
     private static int? ValidarCategoriaId(int? categoriaId, ResultadoValidacion resultado)
     {
@@ -157,7 +182,14 @@ public static class ValidadorMovimiento
         return nota;
     }
 
-    private static TipoMovimiento? ValidarTipoEsperado(string? tipoEsperado, ResultadoValidacion resultado)
+    /// <summary>
+    /// Queda FUERA de <see cref="Validar"/> y la invoca solo el alta. <c>tipoEsperado</c> es una
+    /// entrada no confiable del cliente que solo sirve para detectar el cruce de tipo en el POST; la
+    /// modificación no la necesita, porque compara contra el tipo persistido del movimiento, que sí
+    /// es confiable. Acumula sobre el mismo <paramref name="resultado"/> para que un cuerpo con dos
+    /// problemas siga devolviendo los dos errores de una.
+    /// </summary>
+    public static TipoMovimiento? ValidarTipoEsperado(string? tipoEsperado, ResultadoValidacion resultado)
     {
         if (string.IsNullOrWhiteSpace(tipoEsperado))
         {

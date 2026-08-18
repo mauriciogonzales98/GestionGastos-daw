@@ -30,6 +30,7 @@ public static class MovimientosEndpoints
         rutas.MapPost("/api/movimientos", CrearAsync).WithName("CrearMovimiento");
         rutas.MapGet("/api/movimientos", ListarAsync).WithName("ListarMovimientos");
         rutas.MapGet("/api/movimientos/{id:int}", ObtenerPorIdAsync).WithName("ObtenerMovimiento");
+        rutas.MapPut("/api/movimientos/{id:int}", ModificarAsync).WithName("ModificarMovimiento");
         return rutas;
     }
 
@@ -40,7 +41,11 @@ public static class MovimientosEndpoints
         CancellationToken cancelacion)
     {
         var validacion = ValidadorMovimiento.Validar(solicitud, out var validados);
-        if (validados is not { } entrada)
+        // El tipo esperado se valida aparte de las cuatro reglas comunes, y solo acá: es una entrada
+        // no confiable del cliente que solo existe en el alta. Se acumula sobre el mismo resultado
+        // para que un cuerpo con dos problemas siga devolviendo los dos errores juntos.
+        var tipoEsperado = ValidadorMovimiento.ValidarTipoEsperado(solicitud.TipoEsperado, validacion);
+        if (validados is not { } entrada || !validacion.EsValido)
         {
             return TypedResults.ValidationProblem(validacion.ComoDiccionario());
         }
@@ -55,19 +60,13 @@ public static class MovimientosEndpoints
 
         if (categoria is null)
         {
-            return TypedResults.ValidationProblem(
-                new ResultadoValidacion().Agregar("categoriaId", "La categoría no existe").ComoDiccionario());
+            return TypedResults.ValidationProblem(ValidadorMovimiento.CategoriaInexistente().ComoDiccionario());
         }
 
-        if (entrada.TipoEsperado is { } esperado && esperado != categoria.Tipo)
+        if (tipoEsperado is { } esperado && esperado != categoria.Tipo)
         {
             return TypedResults.ValidationProblem(
-                new ResultadoValidacion()
-                    .Agregar(
-                        "categoriaId",
-                        $"La categoría '{categoria.Nombre}' es de tipo {TipoMovimientoTexto.Nombre(categoria.Tipo)} " +
-                        $"y no puede usarse en un movimiento de tipo {TipoMovimientoTexto.Nombre(esperado)}")
-                    .ComoDiccionario());
+                ValidadorMovimiento.TipoCruzado(categoria.Nombre, categoria.Tipo, esperado).ComoDiccionario());
         }
 
         var movimiento = new Movimiento
@@ -190,6 +189,74 @@ public static class MovimientosEndpoints
             .ToList();
 
         return TypedResults.Ok(new ListadoMovimientosResponse(items, total > TechoDeItems, total));
+    }
+
+    /// <summary>
+    /// Modificación de un movimiento propio. El tipo NO se puede cambiar (fuera de alcance por PRD):
+    /// la categoría nueva tiene que ser del mismo tipo que el movimiento persistido, y ese tipo sale
+    /// de la fila y no del cuerpo, que en esto no es confiable.
+    /// </summary>
+    /// <remarks>
+    /// Valida primero y toca la entidad al final: cualquier rechazo tiene que dejar el movimiento con
+    /// todos sus valores anteriores (AC-04). La fila se localiza con una lectura sobre
+    /// <c>DbSet&lt;Movimiento&gt;</c>, donde el filtro global de propietario ya aplica (mitigación
+    /// R-15); un <c>ExecuteUpdate</c> sin esa lectura escribiría sobre filas ajenas.
+    /// </remarks>
+    private static async Task<Results<Ok<MovimientoDto>, ValidationProblem, ProblemHttpResult>> ModificarAsync(
+        int id,
+        ModificarMovimientoRequest solicitud,
+        AppDbContext datos,
+        CancellationToken cancelacion)
+    {
+        var validacion = ValidadorMovimiento.Validar(solicitud, out var validados);
+        if (validados is not { } entrada)
+        {
+            return TypedResults.ValidationProblem(validacion.ComoDiccionario());
+        }
+
+        // Con seguimiento y sin cláusula de propietario: el filtro global es el que decide qué se
+        // puede tocar, y hace indistinguibles "no existe" y "es de otro".
+        var movimiento = await datos.Movimientos.SingleOrDefaultAsync(m => m.Id == id, cancelacion);
+        if (movimiento is null)
+        {
+            return TypedResults.Problem(title: TituloNoEncontrado, statusCode: StatusCodes.Status404NotFound);
+        }
+
+        var categoria = await datos.Categorias
+            .AsNoTracking()
+            .Where(c => c.Id == entrada.CategoriaId)
+            .Select(c => new { c.Id, c.Nombre, c.Tipo })
+            .SingleOrDefaultAsync(cancelacion);
+
+        if (categoria is null)
+        {
+            return TypedResults.ValidationProblem(ValidadorMovimiento.CategoriaInexistente().ComoDiccionario());
+        }
+
+        if (categoria.Tipo != movimiento.Tipo)
+        {
+            return TypedResults.ValidationProblem(
+                ValidadorMovimiento.TipoCruzado(categoria.Nombre, categoria.Tipo, movimiento.Tipo).ComoDiccionario());
+        }
+
+        // Los cuatro campos del contrato y ninguno más: el propietario, el tipo, la moneda y la fecha
+        // de creación no se tocan aunque el cuerpo los traiga (mitigación R-15).
+        movimiento.CategoriaId = categoria.Id;
+        movimiento.Monto = entrada.Monto;
+        movimiento.Fecha = entrada.Fecha;
+        movimiento.Nota = entrada.Nota;
+
+        await datos.SaveChangesAsync(cancelacion);
+
+        return TypedResults.Ok(ADto(
+            movimiento.Id,
+            movimiento.Tipo,
+            categoria.Id,
+            categoria.Nombre,
+            movimiento.Monto,
+            movimiento.Moneda,
+            movimiento.Fecha,
+            movimiento.Nota));
     }
 
     private static async Task<Results<Ok<MovimientoDto>, ProblemHttpResult>> ObtenerPorIdAsync(

@@ -16,7 +16,7 @@ code is written. The findings become mitigations folded into the spec.
 - The proposed design (the plan in progress, before it is written to disk).
 - The PRD at `docs/daw/prd/prd-{ticket}.md` (if `gates.define` is true and the tier is FEATURE).
 - `.daw/rules/security.instructions.md` for the principles.
-- `.daw/rules/validation-rules.instructions.md` §3 for the rules (F-TM-01 to F-TM-07, W-TM-01 to
+- `.daw/rules/validation/threat.md` **y** `.daw/rules/validation/common.md` for the rules (F-TM-01 to F-TM-07, W-TM-01 to
   W-TM-02) — the single source of truth for what makes a threat model acceptable.
 - The project's architecture conventions (`AGENTS.md`) for architectural context.
 - The project's stack: the "Stack" section of `AGENTS.md`.

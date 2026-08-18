@@ -1,5 +1,6 @@
 ---
 name: daw-status
+effort: low
 description: >
   Reads .daw-state.json and prints a formatted summary of where the pipeline is. Read-only — it
   modifies no file.

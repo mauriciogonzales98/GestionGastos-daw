@@ -41,7 +41,7 @@ expensive.
 
 **QUICK-FIX validates too — against different rules.** That tier's artifact is the 4-line fix-brief,
 not a PRD, so `daw-validate-prd` runs under the tier modifier in
-`.daw/rules/validation-rules.instructions.md`: the four sections (Bug, Change, Regression test,
+`.daw/rules/validation/common.md`: the four sections (Bug, Change, Regression test,
 Risk) present and non-empty → PASS. The `F-PRD-*` rules do not apply. What is never optional is
 *running* the validation; what changes per tier is what it demands.
 

@@ -15,7 +15,7 @@ Static Application Security Testing (SAST). Scans the code for security vulnerab
 ## Inputs
 - The files modified during implementation.
 - `.daw/rules/security.instructions.md` for the practices.
-- `.daw/rules/validation-rules.instructions.md` §4 for the rules (F-SAST-01 to F-SAST-19,
+- `.daw/rules/validation/sast.md` **y** `.daw/rules/validation/common.md` for the rules (F-SAST-01 to F-SAST-19,
   W-SAST-01) — the single source of truth for severity and disposition.
 - The project's stack: the "Stack" section of `AGENTS.md`.
 
@@ -60,7 +60,7 @@ Static Application Security Testing (SAST). Scans the code for security vulnerab
 
 **Every finding, including false positives, has to be documented** — an undocumented finding is an
 unreviewed finding. To suppress a Medium, use the 7-field format in
-`.daw/rules/validation-rules.instructions.md` §4.4 (file, category, disposition, reviewer, date,
+`.daw/rules/validation/sast.md` (Suppression Protocol) (file, category, disposition, reviewer, date,
 justification, compensating control/review-by). Missing any field is a FAIL (F-SAST-18), and a
 suppression older than 6 months has to be re-evaluated (F-SAST-19).
 

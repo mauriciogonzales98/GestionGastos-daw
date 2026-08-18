@@ -1,7 +1,8 @@
 ---
 name: "daw-impact-scanner"
 description: "Read-only codebase scanner. Given a draft technical plan, finds every file the change actually touches — sibling implementations, call sites, exports and repeated patterns — and reports the gaps. Never edits anything."
-model: "inherit"
+model: "sonnet"
+effort: "low"
 tools: "Read, Grep, Glob, Bash"
 ---
 

@@ -125,18 +125,18 @@ describe('<module>/<function>')
 ## Test Traceability
 
 - **Every AC in the PRD must have at least one test validating it** (F-VER-01 in
-  `.daw/rules/validation-rules.instructions.md`). Checked in the VERIFY phase.
+  `.daw/rules/validation/verify.md`). Checked in the VERIFY phase.
 - **Every test listed in the spec must exist and pass** (F-VER-06 in
-  `.daw/rules/validation-rules.instructions.md`). Tests in the spec are approved commitments.
+  `.daw/rules/validation/verify.md`). Tests in the spec are approved commitments.
 - **Every endpoint/function that accepts input must have at least one sad-path test** (F-VER-04 in
-  `.daw/rules/validation-rules.instructions.md`). Happy-path-only tests are not enough.
+  `.daw/rules/validation/verify.md`). Happy-path-only tests are not enough.
 
 ## Notes for the Agent
 
 - Every block in the spec must have at least one test.
 - Every fix must have a regression test (F-SPEC-14 in
-  `.daw/rules/validation-rules.instructions.md`).
+  `.daw/rules/validation/verify.md`).
 - Run `daw-test` after each block, not only at the end.
 - If a test fails, work out whether it is a bug in the test or in the code before fixing.
 - Coverage and test-completeness validation rules are centralized in
-  `.daw/rules/validation-rules.instructions.md` (sections 2 and 5).
+  `.daw/rules/validation/spec.md` y `.daw/rules/validation/verify.md`.

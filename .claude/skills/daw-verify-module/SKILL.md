@@ -18,7 +18,7 @@ spec. A blocking gate.
   `gates.spec` is true).
 - The implemented code.
 - The tests, and their results.
-- `.daw/rules/validation-rules.instructions.md` §5 for the rules (F-VER-01 to F-VER-06, W-VER-01 to
+- `.daw/rules/validation/verify.md` **y** `.daw/rules/validation/common.md` for the rules (F-VER-01 to F-VER-06, W-VER-01 to
   W-VER-03) — the single source of truth.
 - The `tier` from `.daw-state.json`.
 

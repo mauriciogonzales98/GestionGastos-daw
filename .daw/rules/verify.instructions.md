@@ -14,7 +14,7 @@ Read `.daw-state.json.tier` to determine your behavior.
 ## Step 1: Module Verification
 
 1. Run `daw-verify-module`, applying **every rule in section 5 of
-   `.daw/rules/validation-rules.instructions.md`** (F-VER-01 to F-VER-06, W-VER-01 to W-VER-03).
+   `.daw/rules/validation/verify.md`** (F-VER-01 to F-VER-06, W-VER-01 to W-VER-03).
    This skill verifies:
    - Every AC in the PRD has a passing test (F-VER-01 — FAIL if missing).
    - Every task in the spec/fix-plan is implemented (F-VER-02 — FAIL if missing).

@@ -10,7 +10,7 @@ description: >
 
 ## Description
 Validates that a spec/fix-plan is complete, coherent and consistent with its PRD, against the rules
-in section 2 of `.daw/rules/validation-rules.instructions.md`. Produces a concrete disambiguation
+in `.daw/rules/validation/spec.md`. Produces a concrete disambiguation
 question for every FAIL.
 
 ## Inputs
@@ -18,11 +18,13 @@ question for every FAIL.
   `docs/daw/specs/spec-{ticket}.md` / `docs/daw/specs/fix-{ticket}.md`)
 - The PRD at `docs/daw/prd/prd-{ticket}.md` (if `gates.define` is true and the tier is FEATURE)
 - The `tier` from `.daw-state.json`
-- `.daw/rules/validation-rules.instructions.md` (the rule catalog)
+- `.daw/rules/validation/spec.md` (las reglas de spec) **y** `.daw/rules/validation/common.md`
+  (FAIL vs WARNING, modificador QUICK-FIX, formato del informe). Carga SOLO estos dos: el catálogo
+  completo ya no existe.
 
 ## The rules live in the catalog, not here
 
-**`.daw/rules/validation-rules.instructions.md` §2 is the single source of truth**: F-SPEC-01 to
+**`.daw/rules/validation/spec.md` is the single source of truth**: F-SPEC-01 to
 F-SPEC-16 (FAIL) and W-SPEC-01 to W-SPEC-03 (WARNING). Do not re-derive criteria from memory and do
 not duplicate them here — read the catalog and evaluate its rules mechanically, citing each rule's
 ID in the report.
@@ -59,7 +61,7 @@ phase and no spec.
 
 ### For FEATURE (full spec)
 1. Read the spec and the PRD in full.
-2. Read `.daw/rules/validation-rules.instructions.md` §2.
+2. Read `.daw/rules/validation/spec.md` y `.daw/rules/validation/common.md`.
 3. Build the coverage matrix FR → block and AC → test, and evaluate F-SPEC-01/02/03.
 4. Evaluate per-block completeness (F-SPEC-04 to F-SPEC-11, and F-SPEC-16) on every block.
    For F-SPEC-16, count: the errors the block documents under F-SPEC-10 against the tests it lists

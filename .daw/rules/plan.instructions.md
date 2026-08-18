@@ -160,7 +160,7 @@ gaps.
 ### Threat Modeling (MANDATORY for FEATURE)
 
 Run `daw-threat-modeling` on the proposed design, applying **every rule in section 3 of
-`.daw/rules/validation-rules.instructions.md`** (F-TM-01 to F-TM-07, W-TM-01 to W-TM-02):
+`.daw/rules/validation/threat.md`** (F-TM-01 to F-TM-07, W-TM-01 to W-TM-02):
 - STRIDE analysis per component (F-TM-01).
 - Trust boundary identification (F-TM-02).
 - Every threat with a mitigation or a formally accepted risk (F-TM-03, F-TM-04).
@@ -195,7 +195,7 @@ avoid drift between sources. The path is `docs/daw/specs/spec-{ticket}.md` (defi
 
 ### Post-write validation
 - The skill automatically runs `daw-validate-spec` at the end of its execution, applying **every
-  rule in section 2 of `.daw/rules/validation-rules.instructions.md`** (F-SPEC-01 to F-SPEC-16,
+  rule in section 2 of `.daw/rules/validation/spec.md`** (F-SPEC-01 to F-SPEC-16,
   W-SPEC-01 to W-SPEC-03). The rules are evaluated mechanically — no subjective interpretation.
   **100% coverage of the PRD's FRs is mandatory (F-SPEC-01): if an FR is not covered by any block →
   FAIL, not WARNING.**
@@ -253,7 +253,7 @@ path is `docs/daw/specs/fix-{ticket}.md`.
 
 ### Post-write validation
 - The skill automatically runs `daw-validate-spec`, applying the applicable rules from section 2 of
-  `.daw/rules/validation-rules.instructions.md` (F-SPEC-10, F-SPEC-11, F-SPEC-14 and F-SPEC-15 are
+  `.daw/rules/validation/spec.md` (F-SPEC-10, F-SPEC-11, F-SPEC-14 and F-SPEC-15 are
   mandatory for fix-plans).
 - **If FAILED:** present the FAILs and re-invoke the skill via the Skill tool with
   `skill="daw-create-spec"` in update mode to fold in the corrections (do NOT modify inline). Repeat
@@ -267,7 +267,7 @@ path is `docs/daw/specs/fix-{ticket}.md`.
 Requirements to advance:
 1. The spec/fix-plan file exists on disk.
 2. `daw-validate-spec` returned **PASSED** (0 FAILs per rules F-SPEC-01 to F-SPEC-16 of
-   `.daw/rules/validation-rules.instructions.md`).
+   `.daw/rules/validation/spec.md`).
 3. `daw-threat-modeling` has run → `gates.threat` == `true`.
 4. The user approved the spec/fix-plan.
 

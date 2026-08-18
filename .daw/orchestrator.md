@@ -26,6 +26,10 @@ wins.
 3. Find the **"Router: Phase `{phase}`"** section in this file matching the value of `phase`.
 4. Load into context ONLY the files listed in that router section.
 
+**Validation rules are NOT loaded by the router.** The catalog lives split by family in
+`.daw/rules/validation/`. Each validation skill loads its own file plus `common.md` when it is
+invoked — never the whole catalog, and never up front. Index: `.daw/rules/validation-rules.instructions.md`.
+
 ## Status Line (MANDATORY in every response)
 
 **Every response you give MUST start with a status line.** No exceptions.
@@ -123,27 +127,9 @@ wins.
 
 The state is **one per repo**: one ticket at a time. If the user wants to work on two things
 simultaneously, the answer is **git worktree** (each worktree has its own `.daw-state.json` and its
-own flow), not the pause protocol — that one is for alternating, not for parallelizing. If you
+own flow), not the pause protocol (`.daw/rules/pause.instructions.md`) — that one is for
+alternating, not for parallelizing. If you
 detect another active session on the same directory, say so: they will share the state.
-
-## Pause Protocol
-
-When the user wants to pause the current ticket:
-1. Save the current `.daw-state.json` as `.daw-paused/[ticket].daw-state.json`.
-2. Reset `.daw-state.json` to IDLE with
-   `.daw/scripts/transition.py --to IDLE --action "pause: <ticket> — <reason>"`. The `pause:` prefix
-   is what tells the FSM this is not a closeout that skipped its gates.
-3. Report: "Ticket [ticket] paused. You can resume it any time."
-
-When the user wants to resume a paused ticket:
-1. List the paused tickets in `.daw-paused/`.
-2. The user picks which one to resume.
-3. Restore the saved metadata — `tier`, `ticket`, `title`, `tracker`, `block`, `gates` — into the
-   CURRENT `.daw-state.json`, and append a `IDLE → <phase>` entry with
-   `action: "resume: <ticket>"`. **Never overwrite the file with the saved copy:** its `history` is
-   shorter than the one on disk, and history is append-only — restoring it wholesale reads as a
-   truncation and gets refused.
-4. Run the normal "work in progress" flow (propose, do not auto-resume).
 
 ## Self-Check before write actions
 
@@ -249,8 +235,7 @@ any other section.
 
 ## Router: Phase `DEFINE`
 
-- **Load:** `.daw/rules/define.instructions.md`, `.daw/rules/branches.instructions.md`,
-  `.daw/rules/validation-rules.instructions.md`
+- **Load:** `.daw/rules/define.instructions.md`, `.daw/rules/branches.instructions.md`
 - **Skills:** `/daw-create-prd`, `/daw-validate-prd`, `/daw-commit`, `/daw-self-check`, `/daw-status`
 - **Blocked:** source code. Specs/fix-plans. Writing outside `docs/daw/prd/` (plus
   `docs/daw/specs/rca-{ticket}.md` on a FIX). Committing anything but this phase's artifacts.
@@ -265,7 +250,7 @@ any other section.
 
 ## Router: Phase `PLAN`
 
-- **Load:** `.daw/rules/plan.instructions.md`, `.daw/rules/validation-rules.instructions.md`
+- **Load:** `.daw/rules/plan.instructions.md`
 - **Skills:** `/daw-create-spec`, `/daw-validate-spec`, `/daw-threat-modeling`, `/daw-create-adr`,
   `/daw-commit`, `/daw-self-check`, `/daw-status`
 - **Agents:** `daw-impact-scanner`, `daw-arch-auditor`
@@ -285,15 +270,16 @@ any other section.
 ## Router: Phase `CODE`
 
 - **Load:** `.daw/rules/code.instructions.md`, `.daw/rules/testing.instructions.md`,
-  `.daw/rules/security.instructions.md`, `.daw/rules/validation-rules.instructions.md`
+  `.daw/rules/security.instructions.md`
 - **Skills:** `/daw-validate-arch`, `/daw-test`, `/daw-security-sast`, `/daw-create-adr`,
   `/daw-commit`, `/daw-self-check`, `/daw-status`
 - **Agents:** `daw-implementer`, `daw-module-verifier`, `daw-arch-auditor`, `daw-sec-auditor`
 - **Blocked:** modifying the PRD. Modifying specs. Committing before tests+SAST are green. PRs.
 - **Status line:** `💻 {TIER} · Implementing [3/5] · Block {n}/{total} | {ticket}: {title}`
 - **FIRST action:** `/daw-validate-arch` BEFORE writing code.
-- **Per block:** dispatch `daw-implementer`, then review in two stages (`daw-module-verifier` for
-  spec compliance, `daw-arch-auditor` for quality). Details in `.daw/rules/code.instructions.md`.
+- **Per block:** dispatch `daw-implementer`, then review with `daw-module-verifier` (spec
+  compliance, ALWAYS) and, **only if the block introduces structure**, `daw-arch-auditor`
+  (conventions). Details in `.daw/rules/code.instructions.md`.
 - **On finishing:** `/daw-test` → PASS + `/daw-security-sast` → PASS (BLOCKING GATE).
 - **Exit:** `tests` and `sast` gates present + user confirms → `phase`→`VERIFY`.
 
@@ -302,7 +288,7 @@ any other section.
 ## Router: Phase `VERIFY`
 
 - **Load:** `.daw/rules/verify.instructions.md`, `.daw/rules/commits.instructions.md`, `.daw/rules/security.instructions.md`,
-  `.daw/rules/testing.instructions.md`, `.daw/rules/validation-rules.instructions.md`
+  `.daw/rules/testing.instructions.md`
 - **Skills:** `/daw-verify-module`, `/daw-commit`, `/daw-self-check`, `/daw-status`, `/daw-help`
 - **Agents:** `daw-module-verifier`
 - **Blocked:** writing code (if it fails → go back to CODE). Modifying the PRD. Modifying specs.
@@ -331,7 +317,7 @@ any other section.
 
 ## Router: Phase `DISCOVERY`
 
-- **Load:** `.daw/rules/discovery.instructions.md`, `.daw/rules/validation-rules.instructions.md`
+- **Load:** `.daw/rules/discovery.instructions.md`
 - **Skills:** `/daw-create-prd`, `/daw-validate-prd`, `/daw-commit`, `/daw-create-pr`,
   `/daw-self-check`, `/daw-status`
 - **Blocked:** source code. Specs/fix-plans. Tests. Writing outside `docs/daw/discovery/` and
@@ -396,7 +382,8 @@ Status line: `⚡ QUICK-FIX · {action} | {ticket}: {title}` (no 5-phase numberi
 4. **Corrupt state → STOP and report.** Do not self-repair.
 5. **`/daw-status`, `/daw-self-check`, `/daw-context-check` and `/daw-help`** are available in EVERY
    phase. None of them writes to the state or sets a gate.
-6. **Pause:** follow the pause protocol defined in this file.
+6. **Pause:** load `.daw/rules/pause.instructions.md` and follow it. Only when the user asks to
+   pause or resume — never up front.
 7. **A QUERY, or anything unrelated to the code, during an active flow:** resolve it without touching the state.
 8. **VERIFY ↔ CODE loop:** if VERIFY fails → update state (phase + gates + history) → CODE to fix →
    re-run the CODE closeout → back to VERIFY. Protocol in `.daw/rules/verify.instructions.md`.
@@ -406,126 +393,3 @@ Status line: `⚡ QUICK-FIX · {action} | {ticket}: {title}` (no 5-phase numberi
     gates + history) → re-validate → back to PLAN. Protocol in `.daw/rules/plan.instructions.md`.
 
 ---
-
-## Usage examples
-
-### Example 1: booting in IDLE and classifying a request
-
-#### Context
-
-The user starts a new session. The state is IDLE. They ask to add email validation to a signup form.
-
-##### Initial state
-
-```json
-{
-  "phase": "IDLE",
-  "tier": null,
-  "ticket": null,
-  "title": null
-}
-```
-
-#### Expected interaction
-
-**The agent boots, reads the state, sees IDLE:**
-
-```
-DAW ready. What can I help you with?
-```
-
-**User:** "I need to add email validation to the signup form"
-
-**The agent classifies it as a request that touches code → transitions to CLASSIFY:**
-
-```
-🔍 Classifying request...
-
-Analyzing the repository...
-
-Stack: Next.js + TypeScript + Zod
-Proposed tier: FEATURE
-Ticket: FEAT-001
-Title: Add email validation to the signup form
-
-Do you confirm this classification so we can move on?
-```
-
-**User:** "Yes, go ahead"
-
-**The agent creates the branch and transitions to DEFINE:**
-
-```
-📋 FEATURE · Defining PRD [1/5] | FEAT-001: Add email validation to the signup form
-
-Branch created: feat/FEAT-001-signup-email-validation
-
-I'm going to write the PRD for this feature. I need to understand a few things:
-- Which validation rules do you need? (format, domain, MX check…)
-- Is there an existing validation pattern in the project I should follow?
-```
-
-#### Outcome
-
-The agent went correctly through IDLE → CLASSIFY → DEFINE, respecting the gates and asking for
-explicit confirmation at each transition.
-
-### Example 2: booting with work in progress and an inconsistent state
-
-#### Context
-
-The user starts a session. The state says work is in progress in the CODE phase, but the current
-branch is `main` (the user already merged the PR in another session).
-
-##### Initial state
-
-```json
-{
-  "phase": "CODE",
-  "tier": "FIX",
-  "ticket": "FIX-003",
-  "title": "Fix timeout on the /payments endpoint",
-  "gates": {
-    "define": true,
-    "spec": true,
-    "threat": true
-  }
-}
-```
-
-##### Current branch
-
-```
-main
-```
-
-#### Expected interaction
-
-**The agent boots, reads the state, sees phase=CODE, checks the branch:**
-
-```
-⚠️ Inconsistent state detected:
-  The state says work is in progress, but we are on main.
-  Ticket: FIX-003 — Fix timeout on the /payments endpoint
-  Phase: CODE
-
-What do you want to do?
-  1. Reset to IDLE (the work was already completed/merged)
-  2. Go back to the ticket's branch and resume
-  3. Discard this ticket and reset to IDLE
-```
-
-**User:** "Already merged it, reset to IDLE"
-
-**The agent resets the state with an entry in history:**
-
-```
-State reset to IDLE. Ticket FIX-003 recorded in history.
-
-DAW ready. What can I help you with?
-```
-
-#### Outcome
-
-The agent detected the inconsistency between the state and the current branch, informed the user
-without self-repairing, and waited for an explicit decision before acting.

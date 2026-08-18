@@ -13,18 +13,20 @@ description: >
 > that is not written yet it can only fail or, worse, look like it ran.
 
 ## Description
-Validates a PRD against the rules in section 1 of `.daw/rules/validation-rules.instructions.md`, and
+Validates a PRD against the rules in `.daw/rules/validation/prd.md`, and
 against the project's architecture. Produces a concrete disambiguation question for every FAIL, so
 gaps get resolved before the PRD is approved.
 
 ## Inputs
 - The path to the PRD (an argument, or the last PRD created/modified)
-- `.daw/rules/validation-rules.instructions.md` (the rule catalog)
+- `.daw/rules/validation/prd.md` (las reglas de PRD) **y** `.daw/rules/validation/common.md`
+  (FAIL vs WARNING, modificador QUICK-FIX, formato del informe). Carga SOLO estos dos: el catálogo
+  completo ya no existe.
 - The project's conventions (`AGENTS.md`), if available
 
 ## The rules live in the catalog, not here
 
-**`.daw/rules/validation-rules.instructions.md` §1 is the single source of truth**: F-PRD-01 to
+**`.daw/rules/validation/prd.md` is the single source of truth**: F-PRD-01 to
 F-PRD-09 (FAIL) and W-PRD-01 to W-PRD-05 (WARNING). Do not re-derive criteria from memory and do not
 duplicate them in this file — read the catalog and evaluate its rules mechanically, citing each
 rule's ID in the report.

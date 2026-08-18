@@ -62,7 +62,7 @@ version: 1.1.0
 The `daw-security-sast` skill is a **BLOCKING GATE** in the code phase.
 
 **Validation rules, severity classification and the suppression protocol are defined in section 4 of
-`.daw/rules/validation-rules.instructions.md`** (F-SAST-01 to F-SAST-19, W-SAST-01).
+`.daw/rules/validation/sast.md`** (F-SAST-01 to F-SAST-19, W-SAST-01).
 
 What it scans (mandatory categories — OWASP Top 10, CWE Top 25):
 - Hardcoded secrets in code and configuration (F-SAST-01 — always Critical).
@@ -83,13 +83,13 @@ What it scans (mandatory categories — OWASP Top 10, CWE Top 25):
 **Disposition by severity:**
 - Critical/High → **FAIL, always blocks, not suppressible.**
 - Medium → **FAIL by default, suppressible with formal documentation** (see the suppression protocol
-  in `.daw/rules/validation-rules.instructions.md` §4.4).
+  in `.daw/rules/validation/sast.md` §4.4).
 - Low/Informational → **WARNING, reported, does not block.**
 
 If it finds Critical/High vulnerabilities → **BLOCKED**. You cannot advance to the VERIFY phase.
 
 False positives and suppressions must be documented using the format in section 4.4 of
-`.daw/rules/validation-rules.instructions.md` (7 mandatory fields: file, category, disposition,
+`.daw/rules/validation/sast.md` (7 mandatory fields: file, category, disposition,
 reviewer, date, justification, compensating control/review).
 
 ## Notes for the Agent

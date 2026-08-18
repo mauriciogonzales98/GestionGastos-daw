@@ -1,5 +1,6 @@
 ---
 name: daw-self-check
+effort: low
 description: >
   Full coherence validation of the internal state. Checks that the DAW installation in the repo is
   sound and that the pipeline state is consistent with the artifacts on disk. Read-only.

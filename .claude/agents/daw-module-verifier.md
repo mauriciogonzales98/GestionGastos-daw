@@ -1,7 +1,8 @@
 ---
 name: "daw-module-verifier"
 description: "Spawn it in VERIFY, on an implementation it did not write, to cross-check a module against the PRD, the spec and the tests. Validates complete traceability from requirements to implementation."
-model: "inherit"
+model: "sonnet"
+effort: "medium"
 tools: "Read, Grep, Glob, Bash"
 ---
 

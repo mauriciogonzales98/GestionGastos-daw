@@ -1,5 +1,6 @@
 ---
 name: daw-context-check
+effort: low
 description: >
   Compares what the repository already declares about how it is built — linters, type checkers, CI,
   pre-commit, runtime versions — against what the tool's context file tells DAW. Reports the

@@ -46,7 +46,7 @@ fix-brief** and mark the `define` gate:
 ```
 
 - Validation: the 4 sections present and non-empty → verdict **PASS**. Do NOT run the `F-PRD-*`
-  rules (see "Tier Modifier: QUICK-FIX" in `.daw/rules/validation-rules.instructions.md`).
+  rules (see "Tier Modifier: QUICK-FIX" in `.daw/rules/validation/common.md`).
 - Set `gates.define = true` on the DEFINE→CODE transition.
 - Do NOT invoke `daw-validate-prd` with FEATURE rules.
 
@@ -98,7 +98,7 @@ fix-brief** and mark the `define` gate:
 - NFR-01: [performance, security, etc. — always with a number]
 
 ## Acceptance Criteria
-*(EARS — see `.daw/rules/validation-rules.instructions.md` §1 for the five patterns)*
+*(EARS — see `.daw/rules/validation/prd.md` §1 for the five patterns)*
 - AC-01: WHEN [trigger], THE [system] SHALL [response].
 - AC-02: IF [failure or misuse], THEN THE [system] SHALL [response].
 - AC-03: ...

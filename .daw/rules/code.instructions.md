@@ -110,11 +110,16 @@ start):
      with the assertions that broke. Missing or empty evidence = the block FAILS, however good the
      code looks. A test that never failed proves nothing.
    - **(b) Is it well built?** → `Agent(subagent_type="daw-arch-auditor")` over the files it
-     touched. Verifies conventions and architecture against `AGENTS.md`.
+     touched. Verifies conventions and architecture against `AGENTS.md`. **Only when the block
+     introduces structure**: a new file or folder, a new dependency, a new export or public API, or
+     a call that crosses a layer boundary. A block that only adds functions inside existing files,
+     following a pattern already present in the repo, does NOT get this second spawn — the closeout
+     `Skill(skill="daw-validate-arch")` covers it over the whole diff. State in one line which of
+     the two cases the block is, so the decision is on the record and not implicit.
 
-   If (a) fails → dispatch the implementer again with the correction. If (b) fails → same, with the
-   violations pointed out. Maximum **3 rounds** per block; if it still fails on the third, stop and
-   raise it with the user: the problem is probably in the spec, not in the code.
+   If (a) fails → dispatch the implementer again with the correction. If (b) ran and fails → same,
+   with the violations pointed out. Maximum **3 rounds** per block; if it still fails on the
+   third, stop and raise it with the user: the problem is probably in the spec, not in the code.
 
 5. **Mechanical gates for the block:** `Skill(skill="daw-test")` for the block's tests. **ALWAYS, in
    EVERY block** — do not assume that because you invoked it in the previous one you can run

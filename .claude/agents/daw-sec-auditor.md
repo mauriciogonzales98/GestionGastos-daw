@@ -2,6 +2,7 @@
 name: "daw-sec-auditor"
 description: "Security auditor. Spawn it in CODE when a SAST scan reports findings, to triage them before anyone starts fixing. Classifies true and false positives and provides remediation guidance."
 model: "inherit"
+effort: "medium"
 tools: "Read, Grep, Glob, Bash"
 ---
 

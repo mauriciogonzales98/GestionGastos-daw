@@ -1,5 +1,6 @@
 ---
 name: daw-commit
+effort: low
 description: >
   Creates a commit following Gitmoji + Conventional Commits, with mandatory AI attribution.
   Trigger: /daw-commit, when a DAW phase closes and has artifacts to commit (DEFINE, PLAN, CODE,

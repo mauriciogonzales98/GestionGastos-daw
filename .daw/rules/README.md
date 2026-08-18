@@ -132,7 +132,12 @@ what it is doing and the current phase, it stops and reports.
     release.instructions.md           Phase: commit, PR and closeout
     discovery.instructions.md         Tier: ideation and product definition
     state.instructions.md             The state schema (always loaded)
-    validation-rules.instructions.md  The central catalog of validation rules
+    pause.instructions.md             Pausar/reanudar un ticket (solo bajo demanda)
+    validation-rules.instructions.md  Índice del catálogo de validación
+    validation/                       El catálogo, partido por familia
+      common.md                       FAIL vs WARNING, QUICK-FIX, formato del informe
+      prd.md  spec.md  threat.md      Una familia de reglas por skill
+      sast.md  verify.md
     testing.instructions.md           Convention: testing and coverage
     commits.instructions.md           Convention: Gitmoji + Conventional Commits
     security.instructions.md          Convention: security and SAST
@@ -193,7 +198,9 @@ rule and `scripts/check_versions.py` enforces it.
 - **Architecture conventions** — defined in the target project's `AGENTS.md` (not a DAW file; the
   user fills it in)
 - [state.instructions.md](state.instructions.md) — The `.daw-state.json` schema and how to write it
-- [validation-rules.instructions.md](validation-rules.instructions.md) — The 69 validation rules
+- [validation-rules.instructions.md](validation-rules.instructions.md) — Índice del catálogo de
+  validación. Las 69 reglas viven en [validation/](validation/), partidas por familia: cada skill
+  carga su archivo + `common.md`, nunca el catálogo entero.
 - [testing.instructions.md](testing.instructions.md) — Testing and coverage conventions
 - [commits.instructions.md](commits.instructions.md) — Gitmoji + Conventional Commits and PRs
 - [security.instructions.md](security.instructions.md) — Security practices and SAST

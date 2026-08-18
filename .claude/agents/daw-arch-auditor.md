@@ -1,7 +1,8 @@
 ---
 name: "daw-arch-auditor"
 description: "Read-only architecture auditor. Spawn it in PLAN to check a proposed spec against the project's conventions, and in CODE after each block to audit the files it touched. Reports violations of the project's conventions and architectural patterns; never modifies code."
-model: "inherit"
+model: "sonnet"
+effort: "low"
 tools: "Read, Grep, Glob, Bash"
 ---
 

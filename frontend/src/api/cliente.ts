@@ -1,7 +1,9 @@
 import type {
   CategoriaDto,
   CrearMovimientoRequest,
+  FiltrosDeMovimientos,
   ListadoMovimientosResponse,
+  ModificarMovimientoRequest,
   MovimientoDto,
 } from './tipos';
 
@@ -21,6 +23,20 @@ export class ErrorDeRed extends Error {
   constructor(causa: unknown) {
     super('No pudimos conectar con el servidor.', { cause: causa });
     this.name = 'ErrorDeRed';
+  }
+}
+
+/**
+ * El recurso no está (404). No hereda de `ErrorDelServidor` a propósito: no es un fallo, es un
+ * desenlace de dominio normal —el movimiento se borró desde otra pestaña, o el listado quedó
+ * viejo—, y la vista tiene que poder responder "refrescá la lista" en vez de "algo se rompió".
+ * Distinguirlo mirando el `title` sería un catch por mensaje, que es justo lo que un error tipado
+ * evita.
+ */
+export class ErrorNoEncontrado extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = 'ErrorNoEncontrado';
   }
 }
 
@@ -46,12 +62,14 @@ interface ProblemDetails {
 
 const BASE = '/api';
 
-export async function obtenerCategorias(senal?: AbortSignal): Promise<CategoriaDto[]> {
-  return await pedir<CategoriaDto[]>('/categorias', senal ? { signal: senal } : {});
+export async function obtenerCategorias(): Promise<CategoriaDto[]> {
+  return await pedir<CategoriaDto[]>('/categorias', {});
 }
 
-export async function obtenerMovimientos(senal?: AbortSignal): Promise<ListadoMovimientosResponse> {
-  return await pedir<ListadoMovimientosResponse>('/movimientos', senal ? { signal: senal } : {});
+export async function obtenerMovimientos(
+  filtros?: FiltrosDeMovimientos,
+): Promise<ListadoMovimientosResponse> {
+  return await pedir<ListadoMovimientosResponse>(`/movimientos${comoQueryString(filtros)}`, {});
 }
 
 export async function crearMovimiento(entrada: CrearMovimientoRequest): Promise<MovimientoDto> {
@@ -62,7 +80,61 @@ export async function crearMovimiento(entrada: CrearMovimientoRequest): Promise<
   });
 }
 
+export async function modificarMovimiento(
+  id: number,
+  entrada: ModificarMovimientoRequest,
+): Promise<MovimientoDto> {
+  return await pedir<MovimientoDto>(`/movimientos/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entrada),
+  });
+}
+
+/**
+ * No pasa por `pedir` porque el 204 del backend llega **sin cuerpo**: leerlo con `response.json()`
+ * rompería el borrado exitoso con un error de parseo.
+ */
+export async function eliminarMovimiento(id: number): Promise<void> {
+  await enviar(`/movimientos/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * Los filtros ausentes no viajan: `?desde=&hasta=` no es "sin filtro" sino ruido que esconde el
+ * error de haber olvidado un valor. La cadena vacía cuenta como ausente porque es lo que entrega un
+ * `<input type="date">` sin completar.
+ */
+function comoQueryString(filtros: FiltrosDeMovimientos | undefined): string {
+  const parametros = new URLSearchParams();
+  agregarSiTieneValor(parametros, 'categoriaId', filtros?.categoriaId);
+  agregarSiTieneValor(parametros, 'desde', filtros?.desde);
+  agregarSiTieneValor(parametros, 'hasta', filtros?.hasta);
+  const consulta = parametros.toString();
+  return consulta === '' ? '' : `?${consulta}`;
+}
+
+function agregarSiTieneValor(
+  parametros: URLSearchParams,
+  clave: string,
+  valor: number | string | undefined,
+): void {
+  if (valor === undefined || valor === '') {
+    return;
+  }
+  parametros.set(clave, String(valor));
+}
+
 async function pedir<T>(ruta: string, init: RequestInit): Promise<T> {
+  const respuesta = await enviar(ruta, init);
+  return (await respuesta.json()) as T;
+}
+
+/**
+ * Hace la petición y convierte cualquier desenlace que no sea 2xx en un error tipado. Devuelve la
+ * respuesta **sin leerla**: si el cuerpo se lee, y con qué, lo decide cada llamador — un 204 no
+ * tiene ninguno.
+ */
+async function enviar(ruta: string, init: RequestInit): Promise<Response> {
   let respuesta: Response;
   try {
     respuesta = await fetch(`${BASE}${ruta}`, init);
@@ -73,13 +145,17 @@ async function pedir<T>(ruta: string, init: RequestInit): Promise<T> {
   }
 
   if (respuesta.ok) {
-    return (await respuesta.json()) as T;
+    return respuesta;
   }
 
   const problema = await leerProblema(respuesta);
 
   if (respuesta.status === 400 && problema?.errors) {
     throw new ErrorDeValidacion(traducirErrores(problema.errors));
+  }
+
+  if (respuesta.status === 404) {
+    throw new ErrorNoEncontrado(problema?.title ?? 'El movimiento ya no existe.');
   }
 
   throw new ErrorDelServidor(
@@ -91,7 +167,8 @@ async function pedir<T>(ruta: string, init: RequestInit): Promise<T> {
 /**
  * Traduce la extensión `errors` del RFC 9457 —campo → lista de mensajes— a un mensaje por campo.
  * Las claves son las que emite el servidor (`monto`, `categoriaId`, `fecha`, `nota`,
- * `tipoEsperado`); quién las muestra y dónde es decisión de la vista.
+ * `tipoEsperado` en el alta; `categoriaId`, `desde` y `hasta` en los filtros del listado); quién
+ * las muestra y dónde es decisión de la vista.
  */
 export function traducirErrores(errores: Record<string, string[]>): ErroresPorCampo {
   const traducidos: ErroresPorCampo = {};

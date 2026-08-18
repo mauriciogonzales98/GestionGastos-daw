@@ -159,3 +159,108 @@ comentarios uno por uno contra el estado posterior al `DELETE`:
 
 No se encontró ningún comentario que quedara mintiendo. Los cuatro comentarios nuevos son los del
 handler `EliminarAsync`.
+
+---
+
+## Block 4 — Frontend: cliente HTTP y tipos
+
+**8 tests exigidos por la spec + 3 extra (deuda heredada y decisiones propias). Primera corrida: 11
+en rojo, 5 en verde** — los 5 verdes son los que `cliente.test.ts` ya traía de FEAT-001a, que este
+bloque conserva sin tocar su intención.
+
+| Test | Aserción que rompía |
+|---|---|
+| `obtenerMovimientos_ConFiltros_ArmaLaQueryString` | `Expected: "/api/movimientos?categoriaId=3&desde=2026-08-01&hasta=2026-08-31" / Received: "/api/movimientos"` |
+| `obtenerMovimientos_SinFiltros_NoMandaParametrosVacios` | `Expected: "/api/movimientos?desde=2026-08-01" / Received: "/api/movimientos"` |
+| `obtenerMovimientos_ConCadenasVacias_LasOmite` (extra) | `Expected: "/api/movimientos?categoriaId=5" / Received: "/api/movimientos"` |
+| `obtenerMovimientos_ConRangoInvertido_LanzaErrorDeValidacionConElCampo` (extra) | `Expected: "/api/movimientos?desde=2026-08-31&hasta=2026-08-01" / Received: "/api/movimientos"` |
+| `modificarMovimiento_MandaPutConElCuerpo` | `TypeError: modificarMovimiento is not a function` |
+| `eliminarMovimiento_MandaDeleteYNoLeeCuerpo` | `TypeError: eliminarMovimiento is not a function` |
+| `cliente_Ante404_LanzaErrorNoEncontrado` | `TypeError: modificarMovimiento is not a function` |
+| `cliente_Ante500_SigueLanzandoErrorDelServidor` | `TypeError: modificarMovimiento is not a function` |
+| `cliente_AnteRedCaida_LanzaErrorDeRed` | `TypeError: modificarMovimiento is not a function` |
+| `cliente_Ante400ConErrors_LanzaErrorDeValidacion` | `TypeError: modificarMovimiento is not a function` |
+| `cliente_ConCuerpoDeErrorQueNoEsJson_LanzaErrorDelServidorGenerico` (extra, deuda) | `TypeError: eliminarMovimiento is not a function` |
+
+### Dos tests que pasaron de entrada y hubo que endurecer
+
+La primera corrida real dio **9 en rojo y 7 en verde**: dos de los tests nuevos pasaban contra el
+código viejo, y pasaban por el peor motivo — el cliente ignoraba el argumento de filtros por
+completo, así que "no mandó parámetros vacíos" era cierto sin que nada estuviera implementado.
+
+- `obtenerMovimientos_ConCadenasVacias_LasOmite` pedía `{ desde: '', hasta: '' }` y esperaba
+  `/api/movimientos`. Se endureció agregando `categoriaId: 5` al mismo filtro: ahora exige
+  `/api/movimientos?categoriaId=5`, que un cliente que ignore los filtros no puede producir.
+- `obtenerMovimientos_ConRangoInvertido_LanzaErrorDeValidacionConElCampo` solo miraba el error
+  devuelto, que ya existía desde FEAT-001a. Se endureció asertando además la URL pedida, para que
+  quede atado a que el rango **llegó a viajar**.
+
+Con las dos endurecidas, la corrida previa a implementar quedó en **11 en rojo / 5 en verde**.
+
+**Después: 16/16 en verde.** Suite frontend completa 53/53 (6 archivos), `tsc --noEmit` sin errores,
+`eslint` y `prettier --check` limpios.
+
+### Mutaciones que prueban que los tests muerden
+
+| Mutación | Test que la atrapa | Salida |
+|---|---|---|
+| `leerProblema` sin `try/catch`: parsear el cuerpo del error directo | `cliente_ConCuerpoDeErrorQueNoEsJson_LanzaErrorDelServidorGenerico` | `AssertionError: expected SyntaxError: Unexpected token '<', "<html… to be an instance of ErrorDelServidor` |
+| `eliminarMovimiento` pasando por `pedir` (que lee el cuerpo) en vez de `enviar` | `eliminarMovimiento_MandaDeleteYNoLeeCuerpo` | `promise rejected "SyntaxError: Unexpected end of JSON input" instead of resolving` |
+| `agregarSiTieneValor` sin la guarda: la clave ausente viaja vacía | `obtenerMovimientos_SinFiltros_NoMandaParametrosVacios` (+2) | `Expected: "/api/movimientos" / Received: "/api/movimientos?categoriaId=&desde=&hasta="` |
+| Quitar la rama del 404 de `enviar` | `cliente_Ante404_LanzaErrorNoEncontrado` | `expected ErrorDelServidor: Movimiento no encontrado { traceId: null } to be an instance of ErrorNoEncontrado` |
+
+La primera es **el mutante sobreviviente que FEAT-001a dejó documentado**: con el `try/catch`
+borrado, los 5 tests que el archivo ya tenía seguían los 5 en verde —por eso sobrevivía— y solo cae
+con un cuerpo de error que no es JSON, que es el 502 de un proxy que ninguno simulaba. Las cuatro
+mutaciones fueron revertidas y `cliente.ts` se restauró desde la copia previa a mutar.
+
+### Deuda heredada de FEAT-001a, saldada
+
+1. **Mutante en `leerProblema`** — muerto por
+   `cliente_ConCuerpoDeErrorQueNoEsJson_LanzaErrorDelServidorGenerico` (evidencia arriba).
+2. **`AbortSignal` que ningún llamador pasaba** — se **eliminó** de `obtenerCategorias` y no se
+   agregó a `obtenerMovimientos`. Ningún llamador lo pasaba en FEAT-001a y ninguno de los que este
+   ticket agrega lo necesita: los dos únicos consumidores (`ListadoMovimientos` y
+   `FormularioMovimiento`) cargan al montar y no compiten consigo mismos. Un parámetro que nadie usa
+   no se puede verificar —no hay test que lo ejerza sin inventarle un llamador— y aparenta una
+   cancelación que el cliente no hace. Cuando alguien la necesite de verdad, se agrega junto con el
+   llamador que la pasa, en una línea. Es una **desviación declarada** de la firma literal que la
+   spec escribe en el Block 4; los 8 tests exigidos y el criterio de cierre no la mencionan.
+3. **Cuarta copia del helper `json`** — `cliente.test.ts` usa ahora el `json` de `src/test/infra.ts`,
+   como los otros tres archivos de test. Quedan dos `new Response(...)` construidos en línea, que no
+   son copias del helper sino los dos casos que el helper no puede dar: el 204 **sin cuerpo** y el
+   502 con cuerpo HTML.
+
+### Revisión de comentarios de los archivos tocados
+
+- `tipos.ts`, cabecera del contrato HTTP: decía que los tipos son "los que el backend emite de
+  verdad". Con `FiltrosDeMovimientos` eso pasaba a ser **falso** —esos tres valores no son un tipo
+  del backend ni viajan en un cuerpo, sino en la query string—, así que se agregó la excepción
+  explícita. Los comentarios de `CrearMovimientoRequest`, `MovimientoDto`, `CategoriaDto` y
+  `ListadoMovimientosResponse` siguen exactos: el `PUT` no cambió ninguno de esos contratos.
+- `cliente.ts`, comentario de `traducirErrores`: enumeraba las claves que emite el servidor
+  (`monto`, `categoriaId`, `fecha`, `nota`, `tipoEsperado`). Los filtros agregan `desde` y `hasta`,
+  con lo cual la enumeración quedaba **incompleta**; se completó separando las del alta de las del
+  listado.
+- `cliente.ts`, comentario de `ErrorDelServidor` ("fallo del lado del servidor"): era el que volvía
+  ambiguo al 404. No hubo que corregirlo, porque el 404 dejó de caer ahí; el porqué quedó escrito en
+  el comentario nuevo de `ErrorNoEncontrado`.
+- `cliente.ts`, comentario de `leerProblema` y el del `catch` de red: siguen describiendo lo que
+  hacen. El de red se movió con el `try/catch` de `pedir` a `enviar`, sin cambiar una palabra.
+
+---
+
+## Errata de la spec — pendiente de aplicar en el PLAN de FEAT-001c
+
+Misma situación que las diez erratas que FEAT-001a heredó a este ticket, y por el mismo motivo
+estructural: la spec solo se puede editar en PLAN, y el grafo de transiciones no tiene arista desde
+CODE ni VERIFY hacia esa fase. Lo que se descubre implementando espera al PLAN del ticket siguiente.
+
+| # | Ubicación | Edición |
+|---|-----------|---------|
+| 1 | `spec-FEAT-001b.md:283` | La firma escrita es `obtenerMovimientos(filtros?: FiltrosDeMovimientos, senal?: AbortSignal)`. El `senal?` **no existe** en el código: se eliminó, junto con el de `obtenerCategorias`, como parte de la deuda heredada que el índice del PRD padre declaró candidata para este ticket y que `verify-FEAT-001a.md` (W-VER-01) ya había recomendado borrar. Ningún llamador lo pasaba. La firma real es `obtenerMovimientos(filtros?: FiltrosDeMovimientos)` |
+
+**Verificado en la revisión del Block 4:** la desviación es legítima —mandato explícito, ningún
+llamador, y los bloques 5 y 6 no necesitan cancelación porque sus disparadores son un `<select>` y
+dos `<input type="date">` que confirman valores completos, no texto tecleado—. Lo que quedó mal es
+el documento, no el código.

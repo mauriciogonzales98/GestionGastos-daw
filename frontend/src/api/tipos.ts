@@ -1,7 +1,9 @@
 /**
  * Tipos del contrato HTTP con la API. Los nombres y los valores son los que el backend emite de
  * verdad: `"gasto"`/`"ingreso"` en minúscula (`TipoMovimientoTexto`), la fecha como `yyyy-MM-dd` y
- * la nota como `null` —nunca cadena vacía— cuando no hay nota.
+ * la nota como `null` —nunca cadena vacía— cuando no hay nota. `FiltrosDeMovimientos` es la
+ * excepción: no espeja ningún tipo del backend porque esos tres valores viajan en la query string
+ * del listado y no en un cuerpo.
  */
 export type TipoMovimiento = 'gasto' | 'ingreso';
 
@@ -47,4 +49,29 @@ export interface ListadoMovimientosResponse {
   items: MovimientoDto[];
   recortado: boolean;
   total: number;
+}
+
+/**
+ * Los tres filtros de `GET /api/movimientos`, opcionales e independientes: el que no está no viaja,
+ * y ausente significa "sin ese filtro" —no "ninguno"—. El `| undefined` explícito es por
+ * `exactOptionalPropertyTypes`: la vista mantiene los filtros en un objeto único y necesita poder
+ * asignar `undefined` para volver a "todas las categorías" sin rearmarlo.
+ */
+export interface FiltrosDeMovimientos {
+  categoriaId?: number | undefined;
+  desde?: string | undefined;
+  hasta?: string | undefined;
+}
+
+/**
+ * `ModificarMovimientoRequest` del backend, el cuerpo del `PUT`. No lleva `id` —viaja en la ruta—
+ * ni `usuarioId`, `tipo`, `moneda` o `creadoEn` (mitigación R-15), y tampoco `tipoEsperado`: el
+ * tipo del movimiento ya está persistido y el servidor lo lee de ahí, así que no hay nada que el
+ * cliente tenga que declarar.
+ */
+export interface ModificarMovimientoRequest {
+  categoriaId: number;
+  monto: number;
+  fecha: string;
+  nota: string | null;
 }

@@ -107,3 +107,55 @@ fases antes de que existiera el código. La segunda demuestra que la mitad de AC
 decorativa —"deja el movimiento con todos sus valores anteriores"— acá sí verifica.
 
 Ambas mutaciones fueron revertidas.
+
+---
+
+## Block 3 — Backend: eliminación (`DELETE /api/movimientos/{id}`)
+
+**5 tests planificados. Primera corrida: 5/5 en rojo.**
+
+Todos fallaron con `Actual: MethodNotAllowed` — la ruta `/api/movimientos/{id:int}` ya existía para
+`GET` y `PUT`, pero no para `DELETE` —, con el `Expected` propio de cada uno:
+
+| Test | Aserción que rompía |
+|---|---|
+| `Eliminar_UnMovimientoPropio_Devuelve204` | `Expected: NoContent / Actual: MethodNotAllowed` |
+| `Eliminar_UnMovimientoPropio_DejaDeAparecerEnElListado` | `Expected: NoContent / Actual: MethodNotAllowed` |
+| `Eliminar_DosVeces_DevuelveNotFoundLaSegunda` | `Expected: NoContent / Actual: MethodNotAllowed` (la primera eliminación) |
+| `Eliminar_Inexistente_Devuelve404` | `Expected: NotFound / Actual: MethodNotAllowed` |
+| `Eliminar_DeOtroPropietario_Devuelve404YNoLoBorra` | `Expected: NotFound / Actual: MethodNotAllowed` |
+
+Que el 405 sea el desenlace inicial no vuelve a los dos tests de 404 complacientes: ninguno se
+conforma con el estado. `Eliminar_Inexistente_Devuelve404` exige además `application/problem+json` y
+el `title` igual a `TituloNoEncontrado`, que es lo que distingue el 404 del endpoint del que produce
+el ruteo cuando no hay ruta.
+
+**Después: 5/5 en verde.** Suite backend 124/124, 0 warnings.
+
+### Mutaciones que prueban que los tests muerden
+
+| Mutación | Test que la atrapa | Salida |
+|---|---|---|
+| `.IgnoreQueryFilters()` en la lectura previa (lo que ADR-003 prohíbe y R-15 mitiga) | `Eliminar_DeOtroPropietario_Devuelve404YNoLoBorra` | `Expected: NotFound / Actual: NoContent` — la fila ajena se borraba |
+| Quitar `datos.Movimientos.Remove(movimiento)` dejando el 204 y el `SaveChangesAsync` | `Eliminar_UnMovimientoPropio_DejaDeAparecerEnElListado` (y otros 2) | `Assert.DoesNotContain() Failure: Item found in collection` — el id borrado seguía en el listado |
+
+La primera es el riesgo crítico del threat model: un borrado que responde igual de bien pero pisa
+filas de otro propietario. La segunda cubre la mitad de AC-05 que se suele dar por sentada —"dejar de
+devolverlo en consultas posteriores"—: un 204 mentiroso, sin baja real, no pasa.
+
+Ambas mutaciones fueron revertidas; `MovimientosEndpoints.cs` quedó restaurado desde la copia previa
+a mutar y verificado con `git diff --stat` (34 inserciones, ninguna eliminación).
+
+### Revisión de comentarios del archivo tocado
+
+`MovimientosEndpoints.cs` es el único archivo de producción modificado. Se revisaron sus 20
+comentarios uno por uno contra el estado posterior al `DELETE`:
+
+- `TituloNoEncontrado` — sigue exacto: describe *por qué* el título es el mismo para el inexistente y
+  el ajeno, y no enumera los handlers que lo usan, así que sumar el tercero no lo desactualiza.
+- `TechoDeItems`, y los de `CrearAsync`, `ListarAsync` (incluido el `remarks` sobre los desenlaces
+  del contrato del listado), `ModificarAsync`, `ObtenerPorIdAsync` y `ADto` — hablan de sus propios
+  handlers; el `DELETE` no cambia nada de lo que afirman.
+
+No se encontró ningún comentario que quedara mintiendo. Los cuatro comentarios nuevos son los del
+handler `EliminarAsync`.

@@ -31,6 +31,7 @@ public static class MovimientosEndpoints
         rutas.MapGet("/api/movimientos", ListarAsync).WithName("ListarMovimientos");
         rutas.MapGet("/api/movimientos/{id:int}", ObtenerPorIdAsync).WithName("ObtenerMovimiento");
         rutas.MapPut("/api/movimientos/{id:int}", ModificarAsync).WithName("ModificarMovimiento");
+        rutas.MapDelete("/api/movimientos/{id:int}", EliminarAsync).WithName("EliminarMovimiento");
         return rutas;
     }
 
@@ -257,6 +258,39 @@ public static class MovimientosEndpoints
             movimiento.Moneda,
             movimiento.Fecha,
             movimiento.Nota));
+    }
+
+    /// <summary>
+    /// Eliminación de un movimiento propio. Es <b>definitiva</b>: el PRD descarta baja lógica,
+    /// historial y papelera, así que la fila desaparece de la tabla y no queda ninguna forma de
+    /// recuperarla desde acá (riesgo R-19). La única red es la confirmación en la interfaz.
+    /// </summary>
+    /// <remarks>
+    /// La fila se localiza con una lectura sobre <c>DbSet&lt;Movimiento&gt;</c>, donde el filtro
+    /// global de propietario ya aplica (mitigación R-15): un <c>ExecuteDelete</c> sin esa lectura
+    /// borraría filas ajenas devolviendo igual un 204. Que la lectura no encuentre nada cubre los
+    /// dos casos de AC-06 —inexistente y ajeno— con el mismo 404, y también el segundo
+    /// <c>DELETE</c> sobre el mismo id, que así es un 404 y no un fallo.
+    /// </remarks>
+    private static async Task<Results<NoContent, ProblemHttpResult>> EliminarAsync(
+        int id,
+        AppDbContext datos,
+        CancellationToken cancelacion)
+    {
+        // Con seguimiento y sin cláusula de propietario: el filtro global es el que decide qué se
+        // puede tocar, y hace indistinguibles "no existe" y "es de otro".
+        var movimiento = await datos.Movimientos.SingleOrDefaultAsync(m => m.Id == id, cancelacion);
+        if (movimiento is null)
+        {
+            return TypedResults.Problem(title: TituloNoEncontrado, statusCode: StatusCodes.Status404NotFound);
+        }
+
+        datos.Movimientos.Remove(movimiento);
+        await datos.SaveChangesAsync(cancelacion);
+
+        // 204 y sin cuerpo: no hay recurso que devolver, y el cliente no intenta leer un JSON que
+        // no existe.
+        return TypedResults.NoContent();
     }
 
     private static async Task<Results<Ok<MovimientoDto>, ProblemHttpResult>> ObtenerPorIdAsync(

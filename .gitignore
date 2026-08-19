@@ -32,3 +32,6 @@ appsettings.Development.json
 appsettings.Local.json
 .env
 .env.*
+
+# Scripts personales de la máquina de cada uno, no del proyecto
+ccswitch.sh

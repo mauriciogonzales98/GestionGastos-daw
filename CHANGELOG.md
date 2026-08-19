@@ -25,6 +25,27 @@ a [Versionado Semántico](https://semver.org/lang/es/).
     tras un alta exitosa.
   - `CHANGELOG.md` (este archivo).
 
+- **FEAT-001b** — Filtros del listado, edición y eliminación: lo que hace falta para que lo anotado
+  se pueda corregir, borrar y encontrar.
+  - `GET /api/movimientos` acepta tres filtros opcionales e independientes —`categoriaId`, `desde` y
+    `hasta`—, que se resuelven en la base y no en memoria. El extremo superior del rango queda
+    incluido, y un parámetro ausente significa "sin ese filtro", nunca "categoría cero" ni "fecha
+    mínima".
+  - `PUT /api/movimientos/{id}` — modificación de un movimiento propio con las mismas validaciones
+    que el alta, compartidas en una sola implementación. El tipo no se puede cambiar: la categoría
+    nueva tiene que ser del mismo tipo que el movimiento, y ese tipo sale de la fila persistida.
+  - `DELETE /api/movimientos/{id}` — eliminación definitiva. El PRD descarta baja lógica, historial
+    y papelera, así que la fila desaparece y no queda forma de recuperarla desde la aplicación.
+  - Controles de filtro en el listado, con el mes en curso propuesto al abrir. Un rango inválido
+    deja el listado anterior en pantalla en vez de vaciarlo.
+  - Editar y eliminar desde cada fila. El borrado pide confirmación explícita en un diálogo que
+    nombra el movimiento, y solo entonces llama al servidor.
+
+### Changed
+
+- **FEAT-001b** — El total del listado y la señal `recortado` se calculan sobre el universo **ya
+  filtrado**. Contando todo lo del propietario, `recortado` mentiría con un filtro angosto.
+
 ### Security
 
 - La cadena de conexión vive en user-secrets o en la variable de entorno `ConnectionStrings__Default`,
@@ -37,5 +58,18 @@ a [Versionado Semántico](https://semver.org/lang/es/).
 - Las notas se renderizan como texto plano: no hay un solo `dangerouslySetInnerHTML` en el frontend.
 - El rango de la fecha se valida contra lo que el tipo `DATE` de MySQL admite, para que una fecha
   fuera de rango sea un 400 con motivo y no un 500 del proveedor.
+- Modificar y eliminar localizan la fila con una lectura sujeta al filtro global de propietario, no
+  con un `ExecuteUpdate`/`ExecuteDelete` directo: sin esa lectura, la operación escribiría sobre
+  filas ajenas y devolvería igual una respuesta exitosa.
+- Un movimiento que no existe y uno que es de otro propietario devuelven el mismo 404, con el mismo
+  título. Distinguirlos confirmaría la existencia de una fila ajena.
+- El `PUT` asigna exactamente los cuatro campos del contrato. El propietario, el tipo, la moneda y la
+  fecha de creación no se tocan aunque el cuerpo los traiga.
+- Los filtros de fecha se parsean con formato exacto y cultura invariante, para que `01/02` no
+  signifique cosas distintas según el entorno, y un rango invertido se rechaza antes de tocar la
+  base. Los mensajes de error están redactados a mano: nunca se expone el detalle de la excepción
+  del parseo.
+- La prohibición de `dangerouslySetInnerHTML` se extiende al formulario de edición y al diálogo de
+  confirmación, y pasó a estar fijada por una regla de ESLint para todo el proyecto.
 
 [Unreleased]: https://github.com/mauriciogonzales98/GestionGastos-daw/commits/main

@@ -5,7 +5,7 @@
 | Ticket | FEAT-001 |
 | Tracker | ninguno |
 | Date | 2026-08-16 |
-| Status | Dividido |
+| Status | Completo — los tres sub-tickets mergeados a `main` (2026-08-19) |
 
 ## Sub-tickets
 
@@ -13,9 +13,26 @@
 |---|---|---|---|---|---|
 | FEAT-001a | Alta de movimientos y listado simple | prd-FEAT-001a.md | ninguna | **done** | Mergeado a `main` con `--no-ff` (`0b57669`), PR [#1](https://github.com/mauriciogonzales98/GestionGastos-daw/pull/1) mergeado — 2026-08-17 |
 | FEAT-001b | Filtros del listado, edición y eliminación de movimientos | prd-FEAT-001b.md | depende de a | **done** | Mergeado a `main` con `--no-ff` (`52c8142`), PR [#2](https://github.com/mauriciogonzales98/GestionGastos-daw/pull/2) mergeado — 2026-08-19 |
-| FEAT-001c | Resumen del mes con desglose por categoría | prd-FEAT-001c.md | depende de a y de b | **activo** | — |
+| FEAT-001c | Resumen del mes con desglose por categoría | prd-FEAT-001c.md | depende de a y de b | **done** | Mergeado a `main` vía PR [#4](https://github.com/mauriciogonzales98/GestionGastos-daw/pull/4) (`49de3d1`) — 2026-08-19 |
 
-> **FEAT-001c arranca desde `main`**, que ya tiene el modelo de datos, la API y el frontend de `a`,
+> **Serie cerrada.** Los tres sub-tickets están en `main`. Lo que sigue no pertenece a FEAT-001 y
+> queda acá solo para que no se pierda al cerrar el padre — son tres ítems de infraestructura y deuda
+> que ningún ticket de producto va a levantar por su cuenta:
+> - **El backend no tiene linter.** Detectado antes de `c` y deliberadamente dejado fuera de él.
+> - **Vitest corre sin `typecheck`.** Un contrato del frontend desalineado con el DTO del backend
+>   deja la suite verde y aparece como `undefined` en pantalla; solo lo detecta `tsc --noEmit`.
+>   Demostrado con una mutación en el Block 3 de `c`.
+> - **`W-VER-03`, con vencimiento: 2027-01-01.** `MedicionDeRendimiento.FechasSembradas` siembra
+>   fechas de 2026 mientras el resumen usa el reloj real, así que los dos tests de rendimiento de `c`
+>   van a fallar solos a partir de enero de 2027. No es una regresión: es el arnés de pruebas, con
+>   fecha conocida. Detalle en `docs/daw/reports/verify-FEAT-001c.md`.
+>
+> A eso se suma, del lado de producto y no de infraestructura, que **ninguna de las tres features
+> definió su maquetación**: el CSS del proyecto resuelve lo semántico (color de error, foco visible,
+> contraste AA) pero las clases de disposición no tienen regla. Una pasada de diseño sobre la
+> pantalla es un ticket propio.
+
+> **FEAT-001c arrancó desde `main`**, que ya tenía el modelo de datos, la API y el frontend de `a`,
 > más los filtros, la edición y la eliminación de `b`.
 >
 > **Deuda que hereda de FEAT-001b**, con ubicación exacta en `docs/daw/reports/verify-FEAT-001b.md` y

@@ -290,18 +290,32 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
 
         await using var fabrica = new ApiFactory();
         using var cliente = fabrica.CreateClient();
-        using var respuesta = await cliente.GetAsync($"{Ruta}?foo=bar&desde=basura&limite=1");
 
-        // Los filtros llegan en FEAT-001b: hasta entonces se ignoran, no se rechaza la petición ni
-        // se recorta el listado.
-        Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        var listado = await JsonDeRespuesta.LeerAsync(respuesta);
-        var items = Items(listado);
-        Assert.Equal(2, items.Count);
-        Assert.Equal(
-            new[] { "uno", "dos" },
-            items.Select(i => i.GetProperty("nota").GetString()).ToArray());
-        Assert.Equal(2, listado.GetProperty("total").GetInt32());
+        using (var respuesta = await cliente.GetAsync($"{Ruta}?foo=bar&limite=1"))
+        {
+            // Lo que la API no conoce se sigue ignorando: no rechaza la petición ni recorta el
+            // listado.
+            Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
+            var listado = await JsonDeRespuesta.LeerAsync(respuesta);
+            var items = Items(listado);
+            Assert.Equal(2, items.Count);
+            Assert.Equal(
+                new[] { "uno", "dos" },
+                items.Select(i => i.GetProperty("nota").GetString()).ToArray());
+            Assert.Equal(2, listado.GetProperty("total").GetInt32());
+        }
+
+        // Lo que la API SÍ conoce deja de ignorarse: desde FEAT-001b `desde` es un parámetro del
+        // contrato, y un valor mal formado es entrada inválida, no ruido. El contrato viejo
+        // —"cualquier query string se ignora"— dejó de valer.
+        using (var respuesta = await cliente.GetAsync($"{Ruta}?foo=bar&desde=basura"))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+            var cuerpo = await JsonDeRespuesta.LeerAsync(respuesta);
+            Assert.True(
+                cuerpo.GetProperty("errors").TryGetProperty("desde", out _),
+                "El 400 tiene que nombrar el campo que vino mal.");
+        }
     }
 
     // ---------------------------------------------------------------- utilidades

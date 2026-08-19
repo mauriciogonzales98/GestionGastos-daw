@@ -87,6 +87,9 @@ const seleccionar = {
 };
 
 afterEach(() => {
+  // `restoreAllMocks` no desmonta los globales: sin `unstubAllGlobals` el `fetch` falso sobrevive
+  // al archivo. No dio problemas porque cada test lo vuelve a pisar, pero es una fuga.
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -459,5 +462,268 @@ describe('FormularioMovimiento', () => {
       (argumentos) => (argumentos[1] as RequestInit | undefined)?.method === 'POST',
     );
     expect(altas).toHaveLength(1);
+  });
+});
+
+/**
+ * Modo edición. Es **el mismo componente**: lo que estos tests vigilan es que las reglas no se
+ * dupliquen en una segunda implementación que pueda divergir de la del alta (mitigación R-16 del
+ * lado del cliente), y que el selector no ofrezca categorías de otro tipo —cambiar un gasto en
+ * ingreso está fuera de alcance por PRD, y ofrecerlo para que el servidor lo rechace después sería
+ * un callejón—.
+ */
+const A_EDITAR: MovimientoDto = {
+  id: 42,
+  tipo: 'gasto',
+  categoria: { id: 1, nombre: 'Comida' },
+  monto: 1500.5,
+  moneda: 'ARS',
+  fecha: '2026-08-17',
+  nota: 'Supermercado',
+};
+
+const UN_INGRESO: MovimientoDto = {
+  id: 43,
+  tipo: 'ingreso',
+  categoria: { id: 8, nombre: 'Sueldo' },
+  monto: 250000,
+  moneda: 'ARS',
+  fecha: '2026-08-01',
+  nota: null,
+};
+
+const EDITADO: MovimientoDto = { ...A_EDITAR, monto: 2000, nota: 'Cena' };
+
+function prepararFetchDeEdicion(modificacion?: () => Promise<Response>): ReturnType<typeof vi.fn> {
+  const falso = vi.fn(async (ruta: string, init?: RequestInit) => {
+    if (ruta.startsWith('/api/categorias')) {
+      return json(CATEGORIAS, 200);
+    }
+    if (ruta.startsWith('/api/movimientos') && init?.method === 'PUT') {
+      return modificacion ? await modificacion() : json(EDITADO, 200);
+    }
+    throw new Error(`Ruta no esperada en el test: ${ruta}`);
+  });
+  vi.stubGlobal('fetch', falso);
+  return falso as unknown as ReturnType<typeof vi.fn>;
+}
+
+function cuerpoDeLaModificacion(fetchFalso: ReturnType<typeof vi.fn>): Record<string, unknown> {
+  const llamada = fetchFalso.mock.calls.find(
+    (argumentos) => (argumentos[1] as RequestInit | undefined)?.method === 'PUT',
+  );
+  if (!llamada) {
+    throw new Error('No se hizo ningún PUT /api/movimientos/{id}');
+  }
+  return JSON.parse(String((llamada[1] as RequestInit).body)) as Record<string, unknown>;
+}
+
+function huboModificacion(fetchFalso: ReturnType<typeof vi.fn>): boolean {
+  return fetchFalso.mock.calls.some(
+    (argumentos) => (argumentos[1] as RequestInit | undefined)?.method === 'PUT',
+  );
+}
+
+async function renderizarEdicion(opciones?: {
+  movimiento?: MovimientoDto;
+  modificacion?: () => Promise<Response>;
+}) {
+  const usuario = userEvent.setup();
+  const fetchFalso = prepararFetchDeEdicion(opciones?.modificacion);
+  const onGuardado = vi.fn();
+  const onCancelar = vi.fn();
+  const onNoEncontrado = vi.fn();
+  render(
+    <FormularioMovimiento
+      movimiento={opciones?.movimiento ?? A_EDITAR}
+      onGuardado={onGuardado}
+      onCancelar={onCancelar}
+      onNoEncontrado={onNoEncontrado}
+    />,
+  );
+  // El catálogo llega por red también en edición: hasta que no está, el selector solo tiene el
+  // placeholder y cualquier aserción sobre las opciones sería una carrera.
+  await waitFor(() => expect(seleccionar.categoria().options.length).toBeGreaterThan(1));
+  // Guarda del fixture: los tests de "las mismas reglas que el alta" ya eran verdes contra el modo
+  // alta, así que sin comprobar acá que el formulario está de verdad en modo edición, un componente
+  // que ignorara `movimiento` los dejaría pasar todos sin implementar nada.
+  screen.getByRole('heading', { name: /editar movimiento/i });
+  expect(seleccionar.monto().value).not.toBe('');
+  return { usuario, fetchFalso, onGuardado, onCancelar, onNoEncontrado };
+}
+
+describe('FormularioMovimiento en modo edición', () => {
+  it('Edicion_PrecargaLosValoresDelMovimiento', async () => {
+    await renderizarEdicion();
+
+    expect(seleccionar.categoria().value).toBe('1');
+    expect(seleccionar.monto().value).toBe('1500.5');
+    expect(seleccionar.fecha().value).toBe('2026-08-17');
+    expect(seleccionar.nota().value).toBe('Supermercado');
+    expect(screen.getByRole('heading', { name: /editar movimiento/i })).not.toBeNull();
+  });
+
+  it('Edicion_SoloOfreceCategoriasDelMismoTipo', async () => {
+    await renderizarEdicion({ movimiento: UN_INGRESO });
+
+    const opciones = Array.from(seleccionar.categoria().options)
+      .map((opcion) => opcion.textContent)
+      .filter((texto) => texto !== 'Elegí una categoría');
+
+    expect(opciones).toEqual(['Sueldo', 'Ingreso extra', 'Otros']);
+    expect(opciones).not.toContain('Comida');
+    // Y el tipo no se ofrece siquiera: convertir un ingreso en gasto está fuera de alcance.
+    expect(screen.queryByLabelText('Gasto')).toBeNull();
+    expect(screen.queryByLabelText('Ingreso')).toBeNull();
+  });
+
+  it('Edicion_GuardaConPutYSinTipoEsperado', async () => {
+    const { usuario, fetchFalso, onGuardado } = await renderizarEdicion();
+
+    await usuario.clear(seleccionar.monto());
+    await usuario.type(seleccionar.monto(), '2000');
+    await usuario.clear(seleccionar.nota());
+    await usuario.type(seleccionar.nota(), 'Cena');
+    await usuario.click(seleccionar.guardar());
+
+    await waitFor(() => expect(onGuardado).toHaveBeenCalledWith(EDITADO));
+    // Sin `tipoEsperado`: el tipo ya está persistido y el servidor lo lee de ahí (mitigación R-15).
+    expect(cuerpoDeLaModificacion(fetchFalso)).toEqual({
+      categoriaId: 1,
+      monto: 2000,
+      fecha: '2026-08-17',
+      nota: 'Cena',
+    });
+    const llamada = fetchFalso.mock.calls.find(
+      (argumentos) => (argumentos[1] as RequestInit | undefined)?.method === 'PUT',
+    );
+    expect(llamada?.[0]).toBe('/api/movimientos/42');
+  });
+
+  it('Edicion_BorrandoLaNota_EnviaNull', async () => {
+    const { usuario, fetchFalso, onGuardado } = await renderizarEdicion();
+
+    await usuario.clear(seleccionar.nota());
+    await usuario.click(seleccionar.guardar());
+
+    await waitFor(() => expect(onGuardado).toHaveBeenCalled());
+    expect(cuerpoDeLaModificacion(fetchFalso).nota).toBeNull();
+  });
+
+  it('Edicion_MontoCero_MuestraElMotivoYNoManda', async () => {
+    const { usuario, fetchFalso } = await renderizarEdicion();
+
+    await usuario.clear(seleccionar.monto());
+    await usuario.type(seleccionar.monto(), '0');
+    await usuario.click(seleccionar.guardar());
+
+    expect(motivoDe(seleccionar.monto())).toMatch(/mayor a cero/i);
+    expect(huboModificacion(fetchFalso)).toBe(false);
+  });
+
+  it('Edicion_MontoConTresDecimales_MuestraElMotivoYNoManda', async () => {
+    const { usuario, fetchFalso } = await renderizarEdicion();
+
+    await usuario.clear(seleccionar.monto());
+    await usuario.type(seleccionar.monto(), '10.123');
+    await usuario.click(seleccionar.guardar());
+
+    expect(motivoDe(seleccionar.monto())).toMatch(/2 decimales/i);
+    expect(huboModificacion(fetchFalso)).toBe(false);
+  });
+
+  it('Edicion_SinCategoria_MuestraElMotivoYNoManda', async () => {
+    const { usuario, fetchFalso } = await renderizarEdicion();
+
+    await usuario.selectOptions(seleccionar.categoria(), '');
+    await usuario.click(seleccionar.guardar());
+
+    expect(motivoDe(seleccionar.categoria())).toMatch(/categoría es obligatoria/i);
+    expect(huboModificacion(fetchFalso)).toBe(false);
+  });
+
+  it('Edicion_NotaDeCientoVeintiuno_MuestraElMotivoYNoManda', async () => {
+    const { usuario, fetchFalso } = await renderizarEdicion();
+
+    fireEvent.change(seleccionar.nota(), { target: { value: 'x'.repeat(121) } });
+    await usuario.click(seleccionar.guardar());
+
+    expect(motivoDe(seleccionar.nota())).toMatch(/120 caracteres/i);
+    expect(huboModificacion(fetchFalso)).toBe(false);
+  });
+
+  it('Edicion_LaNotaConHtml_SeCargaComoTextoPlano', async () => {
+    await renderizarEdicion({
+      movimiento: { ...A_EDITAR, nota: '<img src=x onerror="alert(1)">' },
+    });
+
+    // Mitigación R-23: la nota se guarda tal cual el usuario la escribió y se escapa al mostrarla.
+    expect(seleccionar.nota().value).toBe('<img src=x onerror="alert(1)">');
+    expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('Edicion_RechazoDelServidor_MuestraElMensajePorCampo', async () => {
+    const { usuario, onGuardado } = await renderizarEdicion({
+      modificacion: async () =>
+        json(
+          { status: 400, errors: { monto: ['El monto debe ser mayor a cero'] } },
+          400,
+          'application/problem+json',
+        ),
+    });
+
+    await usuario.clear(seleccionar.monto());
+    await usuario.type(seleccionar.monto(), '10');
+    await usuario.click(seleccionar.guardar());
+
+    await waitFor(() => expect(motivoDe(seleccionar.monto())).toMatch(/mayor a cero/i));
+    expect(onGuardado).not.toHaveBeenCalled();
+  });
+
+  it('Edicion_ConMovimientoYaBorrado_AvisaAlPadre', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { usuario, onGuardado, onNoEncontrado } = await renderizarEdicion({
+      modificacion: async () =>
+        json({ status: 404, title: 'El movimiento no existe.' }, 404, 'application/problem+json'),
+    });
+
+    await usuario.click(seleccionar.guardar());
+
+    await waitFor(() => expect(onNoEncontrado).toHaveBeenCalledTimes(1));
+    expect(onGuardado).not.toHaveBeenCalled();
+  });
+
+  it('Edicion_AlCancelar_AvisaAlPadreYNoManda', async () => {
+    const { usuario, fetchFalso, onCancelar } = await renderizarEdicion();
+
+    await usuario.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    expect(onCancelar).toHaveBeenCalledTimes(1);
+    expect(huboModificacion(fetchFalso)).toBe(false);
+  });
+
+  it('Editar_ConRedCaida_MuestraElErrorConReintento', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let caida = true;
+    const { usuario, onGuardado } = await renderizarEdicion({
+      modificacion: async () => {
+        if (caida) {
+          throw new TypeError('Failed to fetch');
+        }
+        return json(EDITADO, 200);
+      },
+    });
+
+    await usuario.click(seleccionar.guardar());
+
+    const aviso = await screen.findByRole('alert');
+    expect(aviso.textContent).toMatch(/conectar/i);
+    expect(onGuardado).not.toHaveBeenCalled();
+
+    caida = false;
+    await usuario.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    await waitFor(() => expect(onGuardado).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

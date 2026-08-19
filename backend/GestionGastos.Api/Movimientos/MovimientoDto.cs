@@ -3,8 +3,8 @@ using GestionGastos.Api.Data.Entidades;
 namespace GestionGastos.Api.Movimientos;
 
 /// <summary>
-/// Forma de salida de un movimiento. La comparten el 201 del alta y el listado (Block 3) para que no
-/// puedan divergir.
+/// Forma de salida de un movimiento. La comparten el 201 del alta, el 200 de la modificación y el
+/// listado, para que no puedan divergir.
 /// </summary>
 public sealed record MovimientoDto(
     int Id,

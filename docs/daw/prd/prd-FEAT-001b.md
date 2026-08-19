@@ -92,7 +92,7 @@ permitir modificar y eliminar un movimiento propio con las mismas validaciones q
 ## Dependencies
 
 - FEAT-001a (`docs/daw/prd/prd-FEAT-001a.md`): entrega el modelo de datos, la abstracción de usuario actual, el catálogo de categorías, el alta de movimientos y el listado sin filtros sobre el que este sub-ticket agrega los filtros. Este sub-ticket no puede empezar antes de que `a` cierre.
-- Base de datos MySQL 8.4.5, schema `gestiongastos`, y el índice sobre propietario y fecha que exige NFR-02 (declarada en `AGENTS.md`, sección Stack).
+- Base de datos MySQL 8.4.10, schema `gestiongastos`, y el índice sobre propietario y fecha que exige NFR-02 (declarada en `AGENTS.md`, sección Stack).
 - Entity Framework Core 9.0.18 con Pomelo.MySQL 9.0.0 para el acceso a datos, y la migración que agrega el índice de NFR-02.
 - Backend .NET 10 exponiendo la API HTTP que consume el frontend React 19 + Vite; ambos declarados en `AGENTS.md`, sección Stack.
 - Ticket posterior de autenticación: reemplazará la abstracción de usuario actual sobre la que se apoya FR-03.

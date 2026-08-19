@@ -276,7 +276,7 @@ fila de otro propietario sobrevive intacta al intento.
 
 **Logic**
 
-`obtenerMovimientos(filtros?: FiltrosDeMovimientos, senal?: AbortSignal)` construye la query string
+`obtenerMovimientos(filtros?: FiltrosDeMovimientos)` construye la query string
 con `URLSearchParams`, **omitiendo** las claves ausentes: un filtro sin valor no viaja como cadena
 vacía. `modificarMovimiento(id, entrada)` hace el `PUT`; `eliminarMovimiento(id)` hace el `DELETE` y
 no espera cuerpo — un 204 no se puede pasar por `response.json()`.
@@ -428,7 +428,11 @@ que es el defecto que costó una ronda de verificación en FEAT-001a.
 ## Final verification
 
 - Los 6 FR y los 2 NFR del PRD tienen cobertura, y los 14 AC tienen al menos un test que los nombra.
-- La suite completa pasa: los 129 tests que FEAT-001a dejó verdes, más los 57 de este ticket.
+- La suite completa pasa. El total observado al cerrar CODE fue **217 tests** (124 backend + 93
+  frontend). La redacción original de esta línea decía "los 129 que FEAT-001a dejó verdes, más los
+  57 de este ticket" = 186, y era falsa: el delta real fue de 88 tests. Se verificó que la
+  diferencia es cobertura de más y no un conteo doble —cada test extra tiene su fila con su motivo
+  en `docs/daw/reports/tdd-FEAT-001b.md`—. Corregido en el PLAN de FEAT-001c.
 - Ningún test existente quedó desactualizado en silencio: `Listar_ConParametrosDesconocidos_LosIgnora` se reescribió, y los tests de frontend que ignoraban la query string pasaron a contemplarla.
 - El SQL emitido por el listado filtrado contiene el `WHERE`, verificado con `ObservadorDeSql`.
 - `ValidadorMovimiento` tiene una sola implementación de cada regla, compartida por POST y PUT.

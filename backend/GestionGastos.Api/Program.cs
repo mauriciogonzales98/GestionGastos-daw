@@ -2,6 +2,7 @@ using GestionGastos.Api.Categorias;
 using GestionGastos.Api.Common;
 using GestionGastos.Api.Data;
 using GestionGastos.Api.Movimientos;
+using GestionGastos.Api.Resumen;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +37,7 @@ app.Use(async (contexto, siguiente) =>
 
 app.MapCategoriasEndpoints();
 app.MapMovimientosEndpoints();
+app.MapResumenEndpoints();
 
 app.Run();
 

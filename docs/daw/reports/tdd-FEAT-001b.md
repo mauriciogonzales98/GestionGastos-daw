@@ -366,6 +366,184 @@ archivo. No dio problemas porque cada test lo vuelve a pisar, pero es una fuga. 
 principio en los dos archivos nuevos. `FormularioMovimiento.test.tsx` tiene la misma omisión y **no
 se tocó**: no es un archivo de este bloque.
 
+## Block 6 — Frontend: editar y eliminar
+
+**8 tests exigidos por la spec + 14 extra. Primera corrida: 21 en rojo y 6 que ni llegaron a
+ejecutarse** — `ConfirmarEliminacion.test.tsx` falló en la resolución del import, que es la forma que
+toma "el componente todavía no existe". Los 70 verdes de esa corrida son los que la suite ya traía
+de FEAT-001a y de los bloques 4 y 5.
+
+| Test | Aserción que rompía |
+|---|---|
+| `Eliminar_PideConfirmacionAntesDeLlamar` | `Error: Failed to resolve import "./ConfirmarEliminacion" from "src/movimientos/ConfirmarEliminacion.test.tsx". Does the file exist?` — el archivo entero contó como `(0 test)` |
+| `Eliminar_AlCancelar_NoLlamaAlServidor` | ídem |
+| `Eliminar_NombraElMovimientoYAvisaQueEsDefinitivo` (extra) | ídem |
+| `Eliminar_LaNotaSeMuestraComoTextoPlano` (extra) | ídem |
+| `Eliminar_ConRedCaida_MuestraElErrorConReintento` (extra) | ídem |
+| `Eliminar_ConMovimientoYaBorrado_AvisaAlPadre` (extra) | ídem |
+| `Editar_GuardaYActualizaLaFila` | `TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Editar el movimiento del 17/08/2026 de Comida"` |
+| `Editar_ConDatosInvalidos_MuestraElErrorYNoCambiaLaFila` | ídem |
+| `Editar_CambiandoLaFechaFueraDelRango_QuitaLaFilaDelListado` | ídem |
+| `Editar_ConMovimientoYaBorrado_MuestraElMensajeYRefresca` (extra) | ídem |
+| `Eliminar_AlConfirmar_QuitaLaFila` | `Unable to find an accessible element with the role "button" and name "Eliminar el movimiento del 17/08/2026 de Comida"` |
+| `Eliminar_ConMovimientoYaBorrado_MuestraElMensajeYRefresca` | ídem |
+| `Edicion_PrecargaLosValoresDelMovimiento` (extra) | `AssertionError: expected '' to be '1'` — el selector arrancaba vacío: el componente ignoraba `movimiento` |
+| `Edicion_SoloOfreceCategoriasDelMismoTipo` (extra) | `AssertionError: expected [ 'Comida', 'Transporte', …(5) ] to deeply equal [ 'Sueldo', 'Ingreso extra', 'Otros' ]` |
+| `Edicion_GuardaConPutYSinTipoEsperado` (extra) | `AssertionError: expected "vi.fn()" to be called with arguments: [ { id: 42, tipo: 'gasto', …(5) } ]` |
+| `Edicion_BorrandoLaNota_EnviaNull` (extra) | `AssertionError: expected "vi.fn()" to be called at least once` |
+| `Edicion_LaNotaConHtml_SeCargaComoTextoPlano` (extra) | `AssertionError: expected '' to be '<img src=x onerror="alert(1)">'` |
+| `Edicion_RechazoDelServidor_MuestraElMensajePorCampo` (extra) | `AssertionError: expected '' to match /mayor a cero/i` |
+| `Edicion_ConMovimientoYaBorrado_AvisaAlPadre` (extra) | `AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times` |
+| `Edicion_AlCancelar_AvisaAlPadreYNoManda` (extra) | ``Unable to find an accessible element with the role "button" and name `/^cancelar$/i` `` |
+| `Editar_ConRedCaida_MuestraElErrorConReintento` | `Unable to find role="alert"` — el PUT nunca salía, así que tampoco había red que se cayera |
+| `Edicion_MontoCero_MuestraElMotivoYNoManda` (extra) | `Unable to find an accessible element with the role "heading" and name /editar movimiento/i` (tras endurecer; ver abajo) |
+| `Edicion_MontoConTresDecimales_MuestraElMotivoYNoManda` (extra) | ídem |
+| `Edicion_SinCategoria_MuestraElMotivoYNoManda` (extra) | ídem |
+| `Edicion_NotaDeCientoVeintiuno_MuestraElMotivoYNoManda` (extra) | ídem |
+| `Listado_CadaFilaOfreceEditarYEliminar` (extra) | `Unable to find an accessible element with the role "button" and name "Editar el movimiento del 17/08/2026 de Comida"` |
+| `Listado_CadaFilaMuestraLosCincoDatos` (reescrito) | `AssertionError: expected [ <td></td>, <td></td>, …(3) ] to have a length of 6 but got 5` |
+
+### Cuatro tests que pasaron de entrada y hubo que endurecer
+
+`Edicion_MontoCero`, `Edicion_MontoConTresDecimales`, `Edicion_SinCategoria` y
+`Edicion_NotaDeCientoVeintiuno` **daban verde antes de implementar nada**, y con razón: comprueban
+que la edición aplica las mismas reglas que el alta, y el componente —que todavía ignoraba la prop
+`movimiento`— se renderizaba en modo alta, donde esas reglas ya existían desde FEAT-001a. Estaban
+afirmando algo que ya era cierto.
+
+La corrección no fue tocar cada test sino el fixture: `renderizarEdicion` ahora **exige antes de
+devolver** que el formulario esté de verdad en modo edición —el encabezado dice "Editar movimiento"
+y el monto viene precargado—. Con esa guarda los cuatro pasaron a fallar con
+`Unable to find an accessible element with the role "heading" and name /editar movimiento/i`, que es
+el motivo correcto: no hay modo edición que probar. Vale para los trece tests del bloque de edición,
+así que ninguno puede volver a dar verde contra el modo alta.
+
+**Después: 93/93 en verde** (9 archivos: los 8 previos más `ConfirmarEliminacion.test.tsx` — 22 tests
+nuevos y 4 archivos de test modificados). `tsc --noEmit` sin errores, `eslint` y `prettier --check`
+limpios.
+
+### Las dos costuras nuevas se ejercen montando `App`
+
+Es el defecto que costó una ronda de verificación en FEAT-001a y el criterio de cierre lo nombra en
+particular: `Editar_GuardaYActualizaLaFila` y `Eliminar_AlConfirmar_QuitaLaFila` montan `App` y hacen
+el recorrido completo —click en el botón de la fila, formulario o diálogo, petición, recarga—, sin
+un solo `rerender()`. Los otros cuatro tests de `App.test.tsx` hacen lo mismo por el mismo motivo.
+
+Lo que lo hace posible es que el `fetch` falso de `App.test.tsx` pasó a ser un **servidor con
+estado**: el `PUT` modifica su colección y el `DELETE` la quita, de modo que la lectura siguiente
+del listado devuelve algo distinto de la anterior. Con respuestas fijas, un componente que nunca
+recargara daría verde igual —la fila ya estaría bien desde la primera lectura—, que es exactamente
+la trampa que el bloque tenía que evitar. El doble además sigue honrando la query string, y por eso
+`Editar_CambiandoLaFechaFueraDelRango_QuitaLaFilaDelListado` significa algo: la fila desaparece
+porque su fecha nueva cae fuera del rango pedido, no porque el test lo haya decidido.
+
+### Mutaciones que prueban que los tests muerden
+
+| Mutación | Test que la atrapa | Salida |
+|---|---|---|
+| `ConfirmarEliminacion`: llamar a `eliminarMovimiento` al montar, sin esperar la confirmación | `Eliminar_PideConfirmacionAntesDeLlamar` | `expected [ { metodo: 'DELETE', … } ] to have a length of 0` — la mitigación R-19 desaparecida |
+| `ConfirmarEliminacion`: que "Cancelar" borre igual | `Eliminar_AlCancelar_NoLlamaAlServidor` | `expected [ … ] to have a length of 0 but got 1` |
+| `App`: no incrementar `version` tras el `PUT` | `Editar_GuardaYActualizaLaFila` | `Unable to find an element with the text: ARS 2.000,00` — el PUT responde 200 y la tabla sigue mostrando el monto viejo |
+| `App`: no incrementar `version` tras el `DELETE` | `Eliminar_AlConfirmar_QuitaLaFila` | `Unable to find an element with the text: /todavía no hay movimientos/i` |
+| `FormularioMovimiento`: no filtrar las categorías por tipo en edición | `Edicion_SoloOfreceCategoriasDelMismoTipo` | `expected [ 'Comida', …(7) ] to deeply equal [ 'Sueldo', 'Ingreso extra', 'Otros' ]` |
+| `FormularioMovimiento`: mandar `tipoEsperado` también en el `PUT` | `Edicion_GuardaConPutYSinTipoEsperado` | `expected { …, tipoEsperado: 'gasto' } to deeply equal { categoriaId: 1, monto: 2000, … }` |
+| `FormularioMovimiento`: tratar el 404 como un error genérico (borrar la rama `ErrorNoEncontrado`) | `Editar_ConMovimientoYaBorrado_MuestraElMensajeYRefresca` | `Unable to find an element with the text: /el movimiento ya no existe/i` — el Bloque 4 habría creado el tipo para nada |
+| `ConfirmarEliminacion`: tratar el 404 como error genérico | `Eliminar_ConMovimientoYaBorrado_MuestraElMensajeYRefresca` | ídem, y el listado no se refresca |
+| `FormularioMovimiento`: saltarse `validar()` en modo edición | `Editar_ConDatosInvalidos_MuestraElErrorYNoCambiaLaFila` | `expected [ { metodo: 'PUT', … } ] to have a length of 0` |
+
+### Decisiones que la spec dejó abiertas
+
+1. **Un solo formulario a la vez.** La spec dice "editar abre el formulario con los valores del
+   movimiento" pero no dice dónde. El de edición **reemplaza** al de alta mientras dura: dos
+   instancias simultáneas del mismo componente repetirían los `id` de los controles y sus etiquetas,
+   que es un defecto de accesibilidad real —y no un problema de los tests—.
+2. **`key={movimiento.id}`** en el formulario de edición. El listado sigue visible mientras se edita,
+   así que se puede pasar a editar otra fila sin cerrar la anterior; sin la `key` React conservaría
+   la instancia y el estado inicial no volvería a sembrarse, dejando el formulario con los valores
+   del movimiento anterior.
+3. **En edición no se ofrece el tipo.** No se muestran los radios en vez de mostrarlos
+   deshabilitados: un control deshabilitado insinúa que en alguna circunstancia se podría usar, y
+   convertir un gasto en ingreso está fuera de alcance por PRD, no temporalmente impedido.
+4. **La petición la hace cada componente, no `App`.** `ConfirmarEliminacion` llama a
+   `eliminarMovimiento` y el formulario a `modificarMovimiento`, igual que el formulario ya llamaba
+   a `crearMovimiento` en FEAT-001a. Así el error de red y su reintento viven donde está el botón
+   que los provocó; `App` solo orquesta —cerrar, avisar y refrescar—.
+5. **El aviso de "ya no existe" lo muestra `App`**, no el componente que recibió el 404: el
+   formulario o el diálogo se cierran en ese mismo instante, y un mensaje que se desmonta con quien
+   lo emitió no lo lee nadie. El componente igual lo setea antes de avisar al padre, para que
+   montado por su cuenta —como en sus tests unitarios— el error no se pierda en silencio.
+6. **El nombre accesible de los botones de fila nombra el movimiento** ("Editar el movimiento del
+   17/08/2026 de Comida"): con varias filas, un "Editar" a secas deja al lector de pantalla sin
+   saber cuál. El texto visible sigue siendo "Editar" y "Eliminar".
+
+### Revisión de comentarios de los archivos tocados
+
+- `App.tsx`, comentario sobre la señal `version`: era el candidato a quedar obsoleto y **lo quedó**.
+  Decía que la incrementa "un alta exitosa"; ahora la disparan cuatro sucesos —alta, modificación,
+  eliminación y el refresco tras un 404—. Se reescribió nombrando los cuatro y conservando el porqué
+  de que la señal siga haciendo falta con filtros: ninguno de esos sucesos cambia el filtro vigente.
+- `ListadoMovimientos.tsx`, doc de la prop `version`: decía "tras un alta exitosa". **Incompleto**
+  por el mismo motivo; reescrito.
+- `ListadoMovimientos.tsx`, comentario del efecto de recarga: nombraba "tras un alta" como único
+  disparador de `version`. **Incompleto**; corregido.
+- `ListadoMovimientos.tsx`, comentario del rango vigente y el de `describirRango`: siguen exactos.
+  Sin cambios.
+- `FormularioMovimiento.tsx`, doc de la prop `onCreado`: decía "Block 5 lo usa para refrescar el
+  listado". **Obsoleto en dos sentidos** —el bloque ya pasó y quien lo usa es `App`—: se reescribió
+  sin número de bloque, que no es información que sobreviva al ticket.
+- `FormularioMovimiento.tsx`, `manejarFalloDelAlta`: el nombre pasó a ser mentira en cuanto la
+  función también maneja el fallo del `PUT`. Renombrada a `manejarFallo`.
+- `FormularioMovimiento.tsx`, comentario de `cambiarTipo` ("la categoría elegida pertenece al tipo
+  anterior: conservarla enviaría el cruce de AC-10"): sigue exacto. En edición la función es
+  inalcanzable porque los radios no se renderizan, y eso está explicado en el JSX, no acá.
+- `FormularioMovimiento.tsx`, doc de `mapearErroresDelServidor`: habla de `errors.tipoEsperado`, que
+  el `PUT` nunca puede devolver porque no lo manda. **Se revisó y se dejó como está**: describe el
+  alta, que es el único camino donde esa clave existe, y no afirma nada falso sobre la edición —el
+  cruce de tipo del `PUT` llega bajo `errors.categoriaId`, que el mismo mapeo ya muestra en el
+  selector correcto—.
+- `FormularioMovimiento.tsx`, comentarios del efecto de categorías, del `enVuelo` y del nombre
+  accesible del botón: siguen exactos. Sin cambios.
+- `FormularioMovimiento.test.tsx`, `afterEach`: se agregó el comentario que explica por qué hace
+  falta `unstubAllGlobals` además de `restoreAllMocks` (ver abajo).
+- `ListadoMovimientos.test.tsx`, comentario del `rerender` que "simula el refresco tras un alta
+  exitosa": sigue siendo válido y se mantiene. Ese archivo prueba el componente aislado; las
+  costuras de verdad las ejercen `App.test.tsx` y `FiltrosMovimientos.test.tsx` montando `App`.
+- `App.test.tsx`, comentario de `prepararFetch`: el doble pasó a tener estado y a atender `PUT` y
+  `DELETE`, así que el comentario se reescribió entero sobre `prepararServidor`, incluyendo el
+  motivo por el que el estado importa. El de la cota superior de lecturas sigue exacto y se
+  conservó.
+- `formato.ts` y `fecha.ts`: no se tocaron, pero se leyeron porque el diálogo de confirmación
+  reutiliza `formatearFecha` y `formatearMonto` para nombrar lo que se va a borrar. Sus comentarios
+  sobre por qué no pasan por `Date` siguen exactos.
+
+### Deuda saldada
+
+`FormularioMovimiento.test.tsx` llamaba `vi.stubGlobal('fetch', …)` en cada test pero su `afterEach`
+solo hacía `restoreAllMocks()`, que **no desmonta los globales** —lo reportó el Block 5, que no podía
+tocar ese archivo—. Se agregó `vi.unstubAllGlobals()`, con el comentario que dice por qué. Este
+bloque sí toca el archivo, así que la fuga se cierra donde correspondía.
+
+### Deuda que se deja explícita, sin empezar
+
+`FiltrosMovimientos` y `FormularioMovimiento` piden cada uno `GET /api/categorias` al montar: dos
+peticiones al mismo endpoint en cada arranque, y una tercera cada vez que se abre la edición. Subir
+la carga del catálogo a `App` y bajarla como prop lo elimina. **No se hizo en este bloque**, a
+conciencia: cambia la interfaz pública de dos componentes y obliga a reescribir los fixtures de
+`FiltrosMovimientos.test.tsx` y `FormularioMovimiento.test.tsx` —que hoy simulan el catálogo por
+`fetch`—, es decir, un refactor transversal que no cabe en "editar y eliminar" y que dejado a medias
+sería peor que no empezado. Queda anotada para el cierre del ticket o para el PLAN de FEAT-001c.
+
+### Hallazgo fuera de alcance
+
+Con el archivo de test número **nueve**, el pool de Vitest sobre WSL empezó a fallar de a un worker
+por corrida: `Failed to start threads worker for … Caused by: Timeout waiting for worker to
+respond`, siempre sobre un archivo distinto y **sin un solo test en rojo** (`8 passed (8)` de nueve
+archivos). Se confirmó que no es código de este bloque de dos maneras: corriendo los ocho archivos
+previos explícitamente —`87 passed`, limpio— y volviendo a correr la suite entera hasta obtener la
+corrida completa, **`Test Files 9 passed (9)` · `Tests 93 passed (93)`**. `--no-file-parallelism` lo
+empeora (los nueve workers expiran). Es el arranque del jsdom sobre un volumen montado, no un
+defecto de la suite; `vite.config.ts` no se tocó.
+
 ---
 
 ## Errata de la spec — pendiente de aplicar en el PLAN de FEAT-001c

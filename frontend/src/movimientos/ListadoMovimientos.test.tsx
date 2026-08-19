@@ -49,6 +49,14 @@ function prepararFetch(respuestas: (() => Promise<Response>)[]): { urls: () => s
   return { urls: () => urls };
 }
 
+/**
+ * Las acciones por fila son obligatorias: una fila con botones que no llaman a nadie sería peor que
+ * no tenerlos. Los tests que no las ejercen igual las pasan, con espías que nadie mira.
+ */
+function acciones() {
+  return { onEditar: vi.fn(), onEliminar: vi.fn() };
+}
+
 /** `noUncheckedIndexedAccess` exige descartar `undefined`; el índice siempre existe en estos tests. */
 function obtener<T>(lista: T[], indice: number): T {
   const elemento = lista[indice];
@@ -68,7 +76,7 @@ describe('ListadoMovimientos', () => {
     const { urls } = prepararFetch([
       async () => json(respuestaListado([MOVIMIENTO_1, MOVIMIENTO_2])),
     ]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     const filas = await screen.findAllByRole('row');
     // La primera fila es el encabezado; las siguientes respetan el orden que envía el backend.
@@ -80,11 +88,12 @@ describe('ListadoMovimientos', () => {
 
   it('Listado_CadaFilaMuestraLosCincoDatos', async () => {
     prepararFetch([async () => json(respuestaListado([MOVIMIENTO_1]))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     const filas = await screen.findAllByRole('row');
     const celdas = within(obtener(filas, 1)).getAllByRole('cell');
-    expect(celdas).toHaveLength(5);
+    // Cinco datos y una sexta celda con las acciones de la fila, que no es un dato del movimiento.
+    expect(celdas).toHaveLength(6);
     expect(obtener(celdas, 0).textContent).toBe('17/08/2026');
     expect(obtener(celdas, 1).textContent).toBe('gasto');
     expect(obtener(celdas, 2).textContent).toBe('Comida');
@@ -94,21 +103,21 @@ describe('ListadoMovimientos', () => {
 
   it('Listado_MuestraLaMonedaJuntoAlMonto', async () => {
     prepararFetch([async () => json(respuestaListado([MOVIMIENTO_1]))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     expect(await screen.findByText('ARS 1.500,50')).not.toBeNull();
   });
 
   it('Listado_MuestraLaNota', async () => {
     prepararFetch([async () => json(respuestaListado([MOVIMIENTO_1]))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     expect(await screen.findByText('Supermercado')).not.toBeNull();
   });
 
   it('Listado_MuestraElRangoVigente', async () => {
     prepararFetch([async () => json(respuestaListado([MOVIMIENTO_1]))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     // Mitigación del PRD: el rango se ve siempre, para que nadie crea que perdió los movimientos
     // de los meses anteriores.
@@ -132,12 +141,14 @@ describe('ListadoMovimientos', () => {
       async () => json(respuestaListado([NUEVO, MOVIMIENTO_1])),
     ]);
 
-    const { rerender } = render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    const { rerender } = render(
+      <ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />,
+    );
     await screen.findByText('17/08/2026');
     expect(screen.queryByText('18/08/2026')).toBeNull();
 
     // Simula el refresco tras un alta exitosa: el padre incrementa `version`.
-    rerender(<ListadoMovimientos version={1} filtros={FILTROS} />);
+    rerender(<ListadoMovimientos version={1} filtros={FILTROS} {...acciones()} />);
 
     expect(await screen.findByText('18/08/2026')).not.toBeNull();
     // La recarga tampoco pierde los filtros por el camino.
@@ -153,10 +164,18 @@ describe('ListadoMovimientos', () => {
       async () => json(respuestaListado([])),
     ]);
 
-    const { rerender } = render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    const { rerender } = render(
+      <ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />,
+    );
     await screen.findByText('17/08/2026');
 
-    rerender(<ListadoMovimientos version={0} filtros={{ categoriaId: 8, desde: '2026-07-01' }} />);
+    rerender(
+      <ListadoMovimientos
+        version={0}
+        filtros={{ categoriaId: 8, desde: '2026-07-01' }}
+        {...acciones()}
+      />,
+    );
 
     expect(await screen.findByText(/todavía no hay movimientos/i)).not.toBeNull();
     expect(obtener(urls(), 1)).toBe('/api/movimientos?categoriaId=8&desde=2026-07-01');
@@ -165,7 +184,7 @@ describe('ListadoMovimientos', () => {
 
   it('Listado_NotaNula_CeldaVaciaSinRelleno', async () => {
     prepararFetch([async () => json(respuestaListado([MOVIMIENTO_2]))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     const filas = await screen.findAllByRole('row');
     const celdaDeNota = obtener(within(obtener(filas, 1)).getAllByRole('cell'), 4);
@@ -174,7 +193,7 @@ describe('ListadoMovimientos', () => {
 
   it('Listado_SinMovimientos_MuestraEstadoVacio', async () => {
     prepararFetch([async () => json(respuestaListado([]))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     expect(await screen.findByText(/todavía no hay movimientos/i)).not.toBeNull();
     expect(screen.queryByRole('table')).toBeNull();
@@ -195,7 +214,7 @@ describe('ListadoMovimientos', () => {
     });
     vi.stubGlobal('fetch', falso);
 
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     await screen.findByRole('alert');
     const botonReintentar = screen.getByRole('button', { name: /reintentar/i });
@@ -209,7 +228,7 @@ describe('ListadoMovimientos', () => {
 
   it('Listado_Recortado_AvisaAlUsuario', async () => {
     prepararFetch([async () => json(respuestaListado([MOVIMIENTO_1], true))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     expect(await screen.findByText(/500 movimientos más recientes/i)).not.toBeNull();
   });
@@ -220,10 +239,44 @@ describe('ListadoMovimientos', () => {
       nota: '<img src=x onerror="alert(1)">',
     };
     prepararFetch([async () => json(respuestaListado([conHtml]))]);
-    render(<ListadoMovimientos version={0} filtros={FILTROS} />);
+    render(<ListadoMovimientos version={0} filtros={FILTROS} {...acciones()} />);
 
     const texto = await screen.findByText('<img src=x onerror="alert(1)">');
     expect(texto.tagName.toLowerCase()).not.toBe('img');
     expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('Listado_CadaFilaOfreceEditarYEliminar', async () => {
+    const usuario = userEvent.setup();
+    prepararFetch([async () => json(respuestaListado([MOVIMIENTO_1, MOVIMIENTO_2]))]);
+    const onEditar = vi.fn();
+    const onEliminar = vi.fn();
+    render(
+      <ListadoMovimientos
+        version={0}
+        filtros={FILTROS}
+        onEditar={onEditar}
+        onEliminar={onEliminar}
+      />,
+    );
+
+    const filas = await screen.findAllByRole('row');
+    // El nombre accesible nombra el movimiento: con varias filas, un "Editar" a secas deja al
+    // lector de pantalla —y al test— sin saber cuál de todas.
+    const editar = within(obtener(filas, 1)).getByRole('button', {
+      name: 'Editar el movimiento del 17/08/2026 de Comida',
+    });
+    await usuario.click(editar);
+    expect(onEditar).toHaveBeenCalledWith(MOVIMIENTO_1);
+
+    const eliminar = within(obtener(filas, 2)).getByRole('button', {
+      name: 'Eliminar el movimiento del 01/08/2026 de Sueldo',
+    });
+    await usuario.click(eliminar);
+    expect(onEliminar).toHaveBeenCalledWith(MOVIMIENTO_2);
+
+    // Ninguna acción se dispara sola por el hecho de renderizar la fila.
+    expect(onEditar).toHaveBeenCalledTimes(1);
+    expect(onEliminar).toHaveBeenCalledTimes(1);
   });
 });

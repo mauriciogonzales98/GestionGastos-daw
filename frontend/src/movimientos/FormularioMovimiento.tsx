@@ -3,11 +3,18 @@ import {
   ErrorDeRed,
   ErrorDeValidacion,
   ErrorDelServidor,
+  ErrorNoEncontrado,
   crearMovimiento,
+  modificarMovimiento,
   obtenerCategorias,
   type ErroresPorCampo,
 } from '../api/cliente';
-import type { CategoriaDto, MovimientoDto, TipoMovimiento } from '../api/tipos';
+import type {
+  CategoriaDto,
+  ModificarMovimientoRequest,
+  MovimientoDto,
+  TipoMovimiento,
+} from '../api/tipos';
 import { hoyComoIso } from './fecha';
 
 export const LARGO_MAXIMO_DE_NOTA = 120;
@@ -16,20 +23,43 @@ export const LARGO_MAXIMO_DE_NOTA = 120;
 const MONTO_VALIDO = /^\d{1,13}([.,]\d{1,2})?$/;
 
 export interface PropsFormularioMovimiento {
-  /** Se invoca con el movimiento creado. Block 5 lo usa para refrescar el listado. */
+  /** Se invoca con el movimiento creado. El padre lo usa para refrescar el listado. */
   onCreado?: (movimiento: MovimientoDto) => void;
+  /**
+   * El movimiento a editar. Ausente = modo alta. Es **el mismo componente** a propósito: las
+   * reglas de validación son una sola implementación, no una copia que pueda divergir, que es la
+   * mitigación R-16 llevada al cliente.
+   */
+  movimiento?: MovimientoDto;
+  /** Modo edición: se invoca con el movimiento ya modificado. */
+  onGuardado?: (movimiento: MovimientoDto) => void;
+  /** Modo edición: el usuario descarta los cambios. */
+  onCancelar?: () => void;
+  /** Modo edición: el servidor respondió 404 —el movimiento ya no está—. */
+  onNoEncontrado?: () => void;
 }
 
-export function FormularioMovimiento({ onCreado }: PropsFormularioMovimiento) {
+export function FormularioMovimiento({
+  onCreado,
+  movimiento,
+  onGuardado,
+  onCancelar,
+  onNoEncontrado,
+}: PropsFormularioMovimiento) {
+  const enEdicion = movimiento !== undefined;
   const [categorias, setCategorias] = useState<CategoriaDto[]>([]);
   const [errorDeCategorias, setErrorDeCategorias] = useState<string | null>(null);
   const [cargandoCategorias, setCargandoCategorias] = useState(true);
 
-  const [tipo, setTipo] = useState<TipoMovimiento>('gasto');
-  const [categoriaId, setCategoriaId] = useState('');
-  const [monto, setMonto] = useState('');
-  const [fecha, setFecha] = useState(() => hoyComoIso());
-  const [nota, setNota] = useState('');
+  // En edición el estado arranca en los valores del movimiento. El padre monta este componente con
+  // `key={movimiento.id}`, así que pasar a editar otro lo remonta y el estado se vuelve a sembrar.
+  const [tipo, setTipo] = useState<TipoMovimiento>(movimiento?.tipo ?? 'gasto');
+  const [categoriaId, setCategoriaId] = useState(
+    movimiento === undefined ? '' : String(movimiento.categoria.id),
+  );
+  const [monto, setMonto] = useState(movimiento === undefined ? '' : String(movimiento.monto));
+  const [fecha, setFecha] = useState(() => movimiento?.fecha ?? hoyComoIso());
+  const [nota, setNota] = useState(movimiento?.nota ?? '');
 
   const [errores, setErrores] = useState<ErroresPorCampo>({});
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
@@ -144,29 +174,49 @@ export function FormularioMovimiento({ onCreado }: PropsFormularioMovimiento) {
     setEnviando(true);
     setErrorGeneral(null);
     try {
-      const creado = await crearMovimiento({
+      const datos: ModificarMovimientoRequest = {
         categoriaId: Number(categoriaId),
         monto: Number(monto.trim().replace(',', '.')),
         fecha,
         nota: nota.trim() === '' ? null : nota,
-        tipoEsperado: tipo,
-      });
-      setErrores({});
-      setCategoriaId('');
-      setMonto('');
-      setNota('');
-      onCreado?.(creado);
+      };
+
+      if (movimiento !== undefined) {
+        // Sin `tipoEsperado`: el tipo del movimiento ya está persistido y el servidor lo lee de
+        // ahí, así que no hay nada que el cliente tenga que declarar (mitigación R-15).
+        const actualizado = await modificarMovimiento(movimiento.id, datos);
+        setErrores({});
+        // Los campos no se limpian: los cierra el padre. Vaciarlos acá haría parpadear el
+        // formulario con datos en blanco antes de desmontarse.
+        onGuardado?.(actualizado);
+      } else {
+        const creado = await crearMovimiento({ ...datos, tipoEsperado: tipo });
+        setErrores({});
+        setCategoriaId('');
+        setMonto('');
+        setNota('');
+        onCreado?.(creado);
+      }
     } catch (error) {
-      manejarFalloDelAlta(error);
+      manejarFallo(error);
     } finally {
       enVuelo.current = false;
       setEnviando(false);
     }
   }
 
-  function manejarFalloDelAlta(error: unknown) {
+  function manejarFallo(error: unknown) {
     if (error instanceof ErrorDeValidacion) {
       setErrores(mapearErroresDelServidor(error.errores));
+      return;
+    }
+
+    if (error instanceof ErrorNoEncontrado) {
+      // No es un fallo del servidor sino un desenlace de dominio: alguien lo borró antes. Por eso
+      // el mensaje no ofrece reintentar —guardar de nuevo daría otro 404— y el padre refresca.
+      setErrorGeneral('El movimiento ya no existe. Actualizamos el listado.');
+      registrarEnConsola(error);
+      onNoEncontrado?.();
       return;
     }
 
@@ -196,7 +246,7 @@ export function FormularioMovimiento({ onCreado }: PropsFormularioMovimiento) {
         void enviar();
       }}
     >
-      <h2>Nuevo movimiento</h2>
+      <h2>{enEdicion ? 'Editar movimiento' : 'Nuevo movimiento'}</h2>
 
       {errorDeCategorias !== null && (
         <p className="aviso-error" role="alert">
@@ -207,27 +257,32 @@ export function FormularioMovimiento({ onCreado }: PropsFormularioMovimiento) {
         </p>
       )}
 
-      <fieldset className="grupo-tipo" disabled={deshabilitado}>
-        <legend>Tipo</legend>
-        <input
-          id="tipo-gasto"
-          type="radio"
-          name="tipo"
-          value="gasto"
-          checked={tipo === 'gasto'}
-          onChange={() => cambiarTipo('gasto')}
-        />
-        <label htmlFor="tipo-gasto">Gasto</label>
-        <input
-          id="tipo-ingreso"
-          type="radio"
-          name="tipo"
-          value="ingreso"
-          checked={tipo === 'ingreso'}
-          onChange={() => cambiarTipo('ingreso')}
-        />
-        <label htmlFor="tipo-ingreso">Ingreso</label>
-      </fieldset>
+      {/* En edición el tipo no se ofrece: convertir un gasto en ingreso está fuera de alcance por
+          PRD, y el selector de categoría queda acotado al tipo del movimiento por el mismo filtro
+          que usa el alta. */}
+      {!enEdicion && (
+        <fieldset className="grupo-tipo" disabled={deshabilitado}>
+          <legend>Tipo</legend>
+          <input
+            id="tipo-gasto"
+            type="radio"
+            name="tipo"
+            value="gasto"
+            checked={tipo === 'gasto'}
+            onChange={() => cambiarTipo('gasto')}
+          />
+          <label htmlFor="tipo-gasto">Gasto</label>
+          <input
+            id="tipo-ingreso"
+            type="radio"
+            name="tipo"
+            value="ingreso"
+            checked={tipo === 'ingreso'}
+            onChange={() => cambiarTipo('ingreso')}
+          />
+          <label htmlFor="tipo-ingreso">Ingreso</label>
+        </fieldset>
+      )}
 
       <div className="campo">
         <label htmlFor="categoria">Categoría</label>
@@ -329,8 +384,13 @@ export function FormularioMovimiento({ onCreado }: PropsFormularioMovimiento) {
       {/* El nombre accesible no cambia mientras la petición vuela: el estado lo comunica
           `aria-busy`, y renombrar el botón haría que un lector de pantalla anuncie otro control. */}
       <button type="submit" disabled={deshabilitado || enviando} aria-busy={enviando}>
-        Guardar movimiento
+        {enEdicion ? 'Guardar cambios' : 'Guardar movimiento'}
       </button>
+      {enEdicion && (
+        <button type="button" disabled={enviando} onClick={onCancelar}>
+          Cancelar
+        </button>
+      )}
     </form>
   );
 }

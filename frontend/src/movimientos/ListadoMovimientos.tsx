@@ -9,7 +9,11 @@ import type { FiltrosDeMovimientos, MovimientoDto } from '../api/tipos';
 import { formatearFecha, formatearMonto } from './formato';
 
 export interface PropsListadoMovimientos {
-  /** El padre incrementa este número tras un alta exitosa para forzar el recargo del listado. */
+  /**
+   * El padre incrementa este número para forzar el recargo del listado. Lo hace tras cada suceso
+   * que cambia su contenido sin cambiar el filtro vigente: un alta, una modificación y una
+   * eliminación.
+   */
   version: number;
   /** Los filtros vigentes. Cambiarlos también recarga: el listado los pasa tal cual al cliente. */
   filtros: FiltrosDeMovimientos;
@@ -18,6 +22,12 @@ export interface PropsListadoMovimientos {
    * usuario tiene que corregir vive en `FiltrosMovimientos`, así que suben al padre.
    */
   onErroresDeFiltro?: (errores: ErroresPorCampo) => void;
+  /**
+   * Las acciones de cada fila. Son obligatorias y no opcionales: una fila con botones que no
+   * llaman a nadie sería peor que una fila sin botones.
+   */
+  onEditar: (movimiento: MovimientoDto) => void;
+  onEliminar: (movimiento: MovimientoDto) => void;
 }
 
 /** Un fallo de carga y si tiene sentido reintentarlo con los mismos datos. */
@@ -30,6 +40,8 @@ export function ListadoMovimientos({
   version,
   filtros,
   onErroresDeFiltro,
+  onEditar,
+  onEliminar,
 }: PropsListadoMovimientos) {
   const [items, setItems] = useState<MovimientoDto[]>([]);
   const [recortado, setRecortado] = useState(false);
@@ -58,8 +70,9 @@ export function ListadoMovimientos({
   }, [filtros, onErroresDeFiltro]);
 
   useEffect(() => {
-    // Recargar cuando cambia `version` (tras un alta) o cuando cambia `filtros` (tras aplicar un
-    // filtro nuevo) es sincronizar con la API, el mismo caso documentado en
+    // Recargar cuando cambia `version` (tras un alta, una modificación o una eliminación) o cuando
+    // cambia `filtros` (tras aplicar un filtro nuevo) es sincronizar con la API, el caso documentado
+    // en
     // https://react.dev/learn/you-might-not-need-an-effect#fetching-data. `filtros` entra por
     // `cargar`, que depende de él.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -117,6 +130,7 @@ export function ListadoMovimientos({
               <th>Categoría</th>
               <th>Monto</th>
               <th>Nota</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -127,6 +141,24 @@ export function ListadoMovimientos({
                 <td>{movimiento.categoria.nombre}</td>
                 <td>{formatearMonto(movimiento.monto, movimiento.moneda)}</td>
                 <td>{movimiento.nota ?? ''}</td>
+                <td className="acciones">
+                  {/* El nombre accesible nombra el movimiento: con varias filas, un "Editar" a
+                      secas deja al lector de pantalla sin saber cuál de todas. */}
+                  <button
+                    type="button"
+                    aria-label={`Editar ${describirMovimiento(movimiento)}`}
+                    onClick={() => onEditar(movimiento)}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Eliminar ${describirMovimiento(movimiento)}`}
+                    onClick={() => onEliminar(movimiento)}
+                  >
+                    Eliminar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -134,6 +166,11 @@ export function ListadoMovimientos({
       </>
     );
   }
+}
+
+/** Fecha y categoría alcanzan para distinguir una fila de otra en el nombre accesible. */
+function describirMovimiento(movimiento: MovimientoDto): string {
+  return `el movimiento del ${formatearFecha(movimiento.fecha)} de ${movimiento.categoria.nombre}`;
 }
 
 /** Los dos extremos son opcionales e independientes, así que hay cuatro frases posibles. */

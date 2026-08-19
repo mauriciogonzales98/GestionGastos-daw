@@ -5,6 +5,7 @@ import type {
   ListadoMovimientosResponse,
   ModificarMovimientoRequest,
   MovimientoDto,
+  ResumenMensual,
 } from './tipos';
 
 /** Un mensaje por campo, listo para mostrarse junto al control correspondiente. */
@@ -70,6 +71,11 @@ export async function obtenerMovimientos(
   filtros?: FiltrosDeMovimientos,
 ): Promise<ListadoMovimientosResponse> {
   return await pedir<ListadoMovimientosResponse>(`/movimientos${comoQueryString(filtros)}`, {});
+}
+
+/** No toma parámetros: el período del resumen lo fija el servidor (FR-03), no el cliente. */
+export async function obtenerResumen(): Promise<ResumenMensual> {
+  return await pedir<ResumenMensual>('/resumen', {});
 }
 
 export async function crearMovimiento(entrada: CrearMovimientoRequest): Promise<MovimientoDto> {

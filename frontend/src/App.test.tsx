@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
-import type { CategoriaDto, MovimientoDto } from './api/tipos';
+import type { CategoriaDto, MovimientoDto, ResumenMensual } from './api/tipos';
 import { json } from './test/infra';
 
 /** Instante fijo: el rango por defecto es el mes en curso y no puede depender del día de la corrida. */
@@ -58,6 +58,21 @@ const EDITABLE: MovimientoDto = {
   nota: 'Supermercado',
 };
 
+/**
+ * Lo que el doble devuelve en `/api/resumen` mientras el test no pida otra cosa. Va en cero a
+ * propósito: los tests de movimientos no miran el resumen, y devolver ahí los mismos importes que
+ * el listado volvería ambiguas sus búsquedas por texto —el mismo `ARS 1.500,50` estaría en la fila
+ * y en el resumen—. Los tres tests del resumen piden el cálculo real con `resumen: 'calculado'`.
+ */
+const RESUMEN_EN_CERO: ResumenMensual = {
+  mes: AHORA.getMonth() + 1,
+  anio: AHORA.getFullYear(),
+  totalIngresado: 0,
+  totalGastado: 0,
+  balance: 0,
+  desglose: [],
+};
+
 interface Peticion {
   metodo: string;
   ruta: string;
@@ -66,6 +81,8 @@ interface Peticion {
 
 interface ServidorFalso {
   lecturasDelListado: () => number;
+  /** Cuántas veces se pidió `/api/resumen`: es lo que distingue "no cambió" de "no se pidió". */
+  lecturasDelResumen: () => number;
   urlsDelListado: () => string[];
   peticionesCon: (metodo: string) => Peticion[];
 }
@@ -85,15 +102,30 @@ function prepararServidor(opciones?: {
   alCrear?: MovimientoDto;
   /** Simula que ya lo borraron desde otra pestaña: `PUT` y `DELETE` responden 404 y la fila no está. */
   yaBorrado?: boolean;
+  /**
+   * Qué contesta `/api/resumen`: el resumen en cero por omisión, el derivado de los movimientos
+   * guardados (`'calculado'`, el único que cambia tras un alta) o un 500 (`'error'`).
+   */
+  resumen?: 'calculado' | 'error';
 }): ServidorFalso {
   const movimientos = [...(opciones?.iniciales ?? [YA_CARGADO])];
   const urls: string[] = [];
   const peticiones: Peticion[] = [];
   const yaBorrado = opciones?.yaBorrado === true;
+  let lecturasDelResumen = 0;
 
   const falso = vi.fn(async (ruta: string, init?: RequestInit) => {
     if (ruta.startsWith('/api/categorias')) {
       return json(CATEGORIAS);
+    }
+    if (ruta.startsWith('/api/resumen')) {
+      lecturasDelResumen += 1;
+      if (opciones?.resumen === 'error') {
+        return json({ status: 500, title: 'Algo se rompió.' }, 500, 'application/problem+json');
+      }
+      return json(
+        opciones?.resumen === 'calculado' ? calcularResumen(movimientos) : RESUMEN_EN_CERO,
+      );
     }
     if (!ruta.startsWith('/api/movimientos')) {
       throw new Error(`Ruta no esperada en el test: ${ruta}`);
@@ -153,9 +185,45 @@ function prepararServidor(opciones?: {
   vi.stubGlobal('fetch', falso);
   return {
     lecturasDelListado: () => urls.length,
+    lecturasDelResumen: () => lecturasDelResumen,
     urlsDelListado: () => urls,
     peticionesCon: (metodo) => peticiones.filter((peticion) => peticion.metodo === metodo),
   };
+}
+
+/**
+ * Agrega lo que el doble tiene guardado, como haría el endpoint real. No recorta por mes: todas las
+ * fechas de estos tests caen dentro del mes de `AHORA`, y el recorte es cosa del backend —está
+ * cubierto por `ResumenTests` en el Block 1—.
+ */
+function calcularResumen(movimientos: MovimientoDto[]): ResumenMensual {
+  const totalIngresado = sumar(movimientos.filter((movimiento) => movimiento.tipo === 'ingreso'));
+  const gastos = movimientos.filter((movimiento) => movimiento.tipo === 'gasto');
+  const porCategoria = new Map<number, { categoriaNombre: string; total: number }>();
+  for (const gasto of gastos) {
+    const acumulado = porCategoria.get(gasto.categoria.id);
+    if (acumulado === undefined) {
+      porCategoria.set(gasto.categoria.id, {
+        categoriaNombre: gasto.categoria.nombre,
+        total: gasto.monto,
+      });
+    } else {
+      acumulado.total += gasto.monto;
+    }
+  }
+  const totalGastado = sumar(gastos);
+  return {
+    mes: AHORA.getMonth() + 1,
+    anio: AHORA.getFullYear(),
+    totalIngresado,
+    totalGastado,
+    balance: totalIngresado - totalGastado,
+    desglose: [...porCategoria].map(([categoriaId, fila]) => ({ categoriaId, ...fila })),
+  };
+}
+
+function sumar(movimientos: MovimientoDto[]): number {
+  return movimientos.reduce((total, movimiento) => total + movimiento.monto, 0);
 }
 
 /** Aplica el cuerpo del `PUT` como lo haría el backend: los cuatro campos, y nada más. */
@@ -214,6 +282,23 @@ async function abrirEdicion(usuario: ReturnType<typeof userEvent.setup>): Promis
       (screen.getByLabelText('Categoría') as HTMLSelectElement).options.length,
     ).toBeGreaterThan(1),
   );
+}
+
+/** El valor que acompaña a un rótulo dentro del resumen, sin confundirlo con los de la tabla. */
+function totalDelResumen(resumen: HTMLElement, rotulo: string): string {
+  const termino = within(resumen).getByText(rotulo);
+  const valor = termino.nextElementSibling;
+  if (valor === null) {
+    throw new Error(`El rótulo "${rotulo}" no tiene ningún valor al lado.`);
+  }
+  return valor.textContent ?? '';
+}
+
+/** La sección del resumen, ya cargada: todo lo que se le pregunta se le pregunta adentro. */
+async function esperarElResumen(): Promise<HTMLElement> {
+  const resumen = await screen.findByRole('region', { name: 'Resumen del mes' });
+  await within(resumen).findByText('Agosto 2026');
+  return resumen;
 }
 
 const seleccionar = {
@@ -431,5 +516,92 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: /editar movimiento/i })).toBeNull();
     await waitFor(() => expect(servidor.lecturasDelListado()).toBe(2));
     expect(screen.queryByText('ARS 1.500,50')).toBeNull();
+  });
+});
+
+/**
+ * Los tres tests que no se pueden escribir contra el componente solo: dos ejercen la costura del
+ * disparador —el resumen se suscribe a `version` y no a `filtros` (AC-06)— y el tercero, que las
+ * dos peticiones de la pantalla son independientes. Montan `App` entera a propósito.
+ */
+describe('Resumen en la pantalla principal', () => {
+  it('Resumen_AlFiltrarElListado_NoCambia', async () => {
+    const usuario = userEvent.setup();
+    const servidor = prepararServidor({
+      iniciales: [YA_CARGADO, EDITABLE],
+      resumen: 'calculado',
+    });
+
+    render(<App />);
+    const resumen = await esperarElResumen();
+    expect(totalDelResumen(resumen, 'Total ingresado')).toBe('ARS 250.000,00');
+    expect(totalDelResumen(resumen, 'Total gastado')).toBe('ARS 1.500,50');
+    expect(totalDelResumen(resumen, 'Balance')).toBe('ARS 248.499,50');
+    expect(servidor.lecturasDelResumen()).toBe(1);
+
+    const categoria = screen.getByLabelText('Filtrar por categoría') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(categoria.disabled).toBe(false);
+    });
+    await usuario.selectOptions(categoria, '2');
+    await usuario.click(screen.getByRole('button', { name: /aplicar filtros/i }));
+
+    // El listado sí se movió: sin esto, un resumen quieto no probaría nada.
+    expect(await screen.findByText(/todavía no hay movimientos/i)).not.toBeNull();
+    expect(servidor.lecturasDelListado()).toBe(2);
+
+    // AC-06: el resumen no se volvió a pedir y sus tres números siguen siendo los del mes.
+    expect(servidor.lecturasDelResumen()).toBe(1);
+    expect(totalDelResumen(resumen, 'Total ingresado')).toBe('ARS 250.000,00');
+    expect(totalDelResumen(resumen, 'Total gastado')).toBe('ARS 1.500,50');
+    expect(totalDelResumen(resumen, 'Balance')).toBe('ARS 248.499,50');
+    expect(within(resumen).getByText('Comida')).not.toBeNull();
+  });
+
+  it('Resumen_TrasUnAlta_SeActualiza', async () => {
+    const usuario = userEvent.setup();
+    const servidor = prepararServidor({ alCrear: GASTO_CREADO, resumen: 'calculado' });
+
+    render(<App />);
+    const resumen = await esperarElResumen();
+    // La ausencia previa es la mitad que importa: sin ella, un resumen que ya trajera el gasto
+    // daría verde sin que la recarga hubiera pasado.
+    expect(totalDelResumen(resumen, 'Total gastado')).toBe('ARS 0,00');
+    expect(within(resumen).queryByText('Comida')).toBeNull();
+    expect(servidor.lecturasDelResumen()).toBe(1);
+
+    await usuario.selectOptions(screen.getByLabelText('Categoría'), '1');
+    await usuario.type(screen.getByLabelText('Monto'), '1500.50');
+    await usuario.click(screen.getByRole('button', { name: /guardar/i }));
+
+    // La otra mitad del disparador: el alta incrementa `version` y el resumen vuelve a pedirse.
+    await waitFor(() => {
+      expect(totalDelResumen(resumen, 'Total gastado')).toBe('ARS 1.500,50');
+    });
+    expect(totalDelResumen(resumen, 'Balance')).toBe('ARS 248.499,50');
+    // El desglose también se movió, y se lee en su fila: el importe está además en el total
+    // gastado, así que buscarlo suelto sería ambiguo.
+    const fila = within(resumen).getByRole('listitem');
+    expect(within(fila).getByText('Comida')).not.toBeNull();
+    expect(within(fila).getByText('ARS 1.500,50')).not.toBeNull();
+    expect(servidor.lecturasDelResumen()).toBe(2);
+  });
+
+  it('Resumen_ConErrorDelServidor_NoTumbaElListado', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const servidor = prepararServidor({ iniciales: [EDITABLE], resumen: 'error' });
+
+    render(<App />);
+
+    // Son dos peticiones independientes: que falle la del resumen no vacía la tabla.
+    expect(await screen.findByText('17/08/2026')).not.toBeNull();
+    expect(screen.getByText('ARS 1.500,50')).not.toBeNull();
+
+    const resumen = screen.getByRole('region', { name: 'Resumen del mes' });
+    const aviso = await within(resumen).findByRole('alert');
+    expect(aviso.textContent).toMatch(/no pudimos cargar el resumen/i);
+    expect(within(resumen).getByRole('button', { name: /reintentar/i })).not.toBeNull();
+    expect(servidor.lecturasDelListado()).toBe(1);
+    expect(servidor.lecturasDelResumen()).toBe(1);
   });
 });

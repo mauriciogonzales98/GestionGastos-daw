@@ -89,7 +89,7 @@ que se eligió, y no que se pasó por alto.
 
 - FEAT-001a (`docs/daw/prd/prd-FEAT-001a.md`): entrega el modelo de datos, la abstracción de usuario actual sobre la que se apoya FR-05, el catálogo de categorías del desglose y el tipo decimal exacto de los montos.
 - FEAT-001b (`docs/daw/prd/prd-FEAT-001b.md`): entrega los filtros del listado, sin los cuales FR-03 y AC-06 no son observables. Este sub-ticket no puede cerrar antes de que `b` cierre.
-- Base de datos MySQL 8.4.5, schema `gestiongastos`, y sus funciones de agregación, sobre las que NFR-02 apoya el cálculo de los totales (declarada en `AGENTS.md`, sección Stack).
+- Base de datos MySQL 8.4.10, schema `gestiongastos`, y sus funciones de agregación, sobre las que NFR-02 apoya el cálculo de los totales (declarada en `AGENTS.md`, sección Stack).
 - Entity Framework Core 9.0.18 con Pomelo.MySQL 9.0.0 para traducir la agregación de NFR-02 a SQL.
 - Backend .NET 10 exponiendo la API HTTP que consume el frontend React 19 + Vite; ambos declarados en `AGENTS.md`, sección Stack.
 - Ticket posterior de autenticación: reemplazará la abstracción de usuario actual sobre la que se apoya FR-05.

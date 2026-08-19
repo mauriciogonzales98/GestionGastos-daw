@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
-import type { CategoriaDto, MovimientoDto } from '../api/tipos';
+import type { CategoriaDto, MovimientoDto, ResumenMensual } from '../api/tipos';
 import { json } from '../test/infra';
 
 /**
@@ -53,6 +53,21 @@ const SUELDO_DE_JULIO: MovimientoDto = {
 
 const MOVIMIENTOS = [COMIDA, TRANSPORTE, SUELDO_DE_JULIO];
 
+/**
+ * `App` monta también el resumen del mes, que pide `/api/resumen` al abrirse. Estos tests son de
+ * los filtros y no lo miran, pero el doble tiene que atenderlo igual: sin esta rama el resumen
+ * queda mostrando su aviso de error y el `findByRole('alert')` del test de red caída deja de saber
+ * de cuál de los dos habla. Va en cero porque ninguno de estos tests afirma nada sobre sus números.
+ */
+const RESUMEN_EN_CERO: ResumenMensual = {
+  mes: 8,
+  anio: 2026,
+  totalIngresado: 0,
+  totalGastado: 0,
+  balance: 0,
+  desglose: [],
+};
+
 interface ServidorFalso {
   urlsDelListado: () => string[];
   ultimaUrlDelListado: () => string;
@@ -81,6 +96,9 @@ function prepararServidor(responder: (url: URL) => Response = responderListado):
   const falso = vi.fn(async (ruta: string) => {
     if (ruta.startsWith('/api/categorias')) {
       return json(CATEGORIAS);
+    }
+    if (ruta.startsWith('/api/resumen')) {
+      return json(RESUMEN_EN_CERO);
     }
     if (ruta.startsWith('/api/movimientos')) {
       urls.push(ruta);
@@ -277,6 +295,9 @@ describe('FiltrosMovimientos', () => {
     const falso = vi.fn(async (ruta: string) => {
       if (ruta.startsWith('/api/categorias')) {
         return json(CATEGORIAS);
+      }
+      if (ruta.startsWith('/api/resumen')) {
+        return json(RESUMEN_EN_CERO);
       }
       urls.push(ruta);
       if (urls.length === 1) {

@@ -53,7 +53,8 @@ files and **propose the text for you to paste here**. You always confirm it.
 | Format | `pnpm --dir frontend format` |
 | Typecheck | `pnpm --dir frontend exec tsc --noEmit` |
 | Test (frontend) | `pnpm --dir frontend test` |
-| Test (backend) | `dotnet test backend/` — requiere `ConnectionStrings__Default` apuntando a `gestiongastos_test` (ADR-002) |
+| Build (backend) | `dotnet build backend/GestionGastos.sln -warnaserror` — hoy es lo más cercano a un linter que tiene el backend |
+| Test (backend) | `dotnet test backend/` — requiere `ConnectionStrings__Default` apuntando a `gestiongastos_test` (ADR-002). CI agrega `--filter "FullyQualifiedName!~Rendimiento"`: los tests de rendimiento miden tiempo de pared y en un runner compartido dan rojos que no dicen nada. En local corren todos |
 
 ---
 

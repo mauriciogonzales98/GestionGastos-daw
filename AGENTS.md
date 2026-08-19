@@ -48,6 +48,12 @@ files and **propose the text for you to paste here**. You always confirm it.
 | Test runner | xUnit en backend, Vitest en frontend |
 | Linter / formatter | ESLint + Prettier |
 | Package manager | pnpm |
+| Install | `pnpm --dir frontend install --frozen-lockfile` |
+| Lint | `pnpm --dir frontend lint` |
+| Format | `pnpm --dir frontend format` |
+| Typecheck | `pnpm --dir frontend exec tsc --noEmit` |
+| Test (frontend) | `pnpm --dir frontend test` |
+| Test (backend) | `dotnet test backend/` — requiere `ConnectionStrings__Default` apuntando a `gestiongastos_test` (ADR-002) |
 
 ---
 

@@ -24,8 +24,21 @@ public static class MedicionDeRendimiento
     /// <summary>Muestras por medición, las que hacen que hablar de un percentil 95 signifique algo.</summary>
     public const int Ejecuciones = 100;
 
-    /// <summary>Presupuesto de NFR-01 para el p95.</summary>
+    /// <summary>Presupuesto de NFR-01 para el p95 de UNA petición: el alta, o el listado.</summary>
     public static readonly TimeSpan PresupuestoP95 = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Presupuesto del p95 de la pantalla principal completa, que AC-11 mide como el listado y el
+    /// resumen juntos.
+    /// </summary>
+    /// <remarks>
+    /// Son dos constantes y no una a propósito: <see cref="PresupuestoP95"/> vale 1 s y es el
+    /// presupuesto de una sola petición, mientras que este cubre las dos que la pantalla hace.
+    /// Reusar la de 1 s para la pantalla mediría contra un criterio que nadie escribió —ni el de
+    /// AC-11, que da 2 s, ni el del listado solo—, y el número resultante no sería comparable con
+    /// ninguno de los dos.
+    /// </remarks>
+    public static readonly TimeSpan PresupuestoP95Pantalla = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Las fechas de los movimientos sembrados, repartidas sobre un año. Se declaran una sola vez

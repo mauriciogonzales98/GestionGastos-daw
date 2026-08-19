@@ -41,6 +41,22 @@ a [Versionado Semántico](https://semver.org/lang/es/).
   - Editar y eliminar desde cada fila. El borrado pide confirmación explícita en un diálogo que
     nombra el movimiento, y solo entonces llama al servidor.
 
+- **FEAT-001c** — Resumen del mes con desglose por categoría: lo anotado deja de ser una lista y pasa
+  a ser un número que se puede mirar.
+  - `GET /api/resumen` — los tres totales del mes calendario en curso —ingresado, gastado y
+    balance— más el desglose de los gastos por categoría, con una fila por categoría que tenga al
+    menos un gasto. Una categoría sin gastos no aparece en cero: no aparece.
+  - **El endpoint no acepta ningún parámetro, y es del contrato.** El período lo fija el servidor,
+    así que el resumen es siempre del mes en curso pase lo que pase con los filtros del listado, y
+    esa garantía no depende de que el cliente se porte bien.
+  - Todo se agrega en SQL: la respuesta trae los tres totales y a lo sumo una fila por categoría,
+    nunca la lista de movimientos, con 1000 movimientos o con 10.
+  - El resumen aparece en la pantalla principal rotulado con su mes y año, se refresca tras un alta,
+    una edición o una eliminación, y **no se mueve cuando el usuario filtra el listado**. El balance
+    negativo se distingue por el signo menos en el texto, no solo por el color.
+  - Si el resumen falla, el listado sigue en pie: son dos peticiones independientes y ofrece
+    reintento por su cuenta.
+
 ### Changed
 
 - **FEAT-001b** — El total del listado y la señal `recortado` se calculan sobre el universo **ya
@@ -71,5 +87,12 @@ a [Versionado Semántico](https://semver.org/lang/es/).
   del parseo.
 - La prohibición de `dangerouslySetInnerHTML` se extiende al formulario de edición y al diálogo de
   confirmación, y pasó a estar fijada por una regla de ESLint para todo el proyecto.
+- La agregación del resumen se apoya en el filtro global de propietario, sin `IgnoreQueryFilters()`.
+  Es la fuga más difícil de ver de todas: no aparecería una fila de más, aparecería un número más
+  grande. Está fijada por un test cuya mutación se registró, porque un test verde no prueba nada si
+  nadie comprobó que puede ponerse rojo.
+- Que la agregación ocurra **en SQL** es un control de seguridad y no solo de rendimiento: una
+  agregación evaluada en memoria devuelve exactamente los mismos números mientras materializa la
+  tabla entera en cada carga de pantalla. Lo distingue un test que observa el SQL emitido.
 
 [Unreleased]: https://github.com/mauriciogonzales98/GestionGastos-daw/commits/main

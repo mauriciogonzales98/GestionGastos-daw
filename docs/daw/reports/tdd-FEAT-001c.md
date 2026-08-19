@@ -272,3 +272,109 @@ en cero daría verde midiendo otra cosa.
    rendimiento. **No se tocó.** Queda anotado como bomba de tiempo con fecha conocida.
 2. `ResumenTests` tiene el mismo anclaje al reloj real, pero siembra contra el mes en curso calculado
    en el momento, así que no lo afecta.
+
+---
+
+## Block 3 — Frontend: cliente HTTP y tipo del contrato
+
+**4 tests escritos. Rojo ANTES: 4/4.**
+
+### Ronda 1 — rojo de import
+
+Con los 4 tests escritos, `ResumenMensual` inexistente y `obtenerResumen` sin escribir:
+
+```
+src/api/cliente.test.ts(13,3): error TS2305: Module '"./cliente"' has no exported member 'obtenerResumen'.
+src/api/cliente.test.ts(18,3): error TS2305: Module '"./tipos"' has no exported member 'ResumenMensual'.
+```
+
+`pnpm test` → `Tests  4 failed | 93 passed (97)`, los cuatro con:
+
+```
+TypeError: obtenerResumen is not a function
+```
+
+### Ronda 2 — rojo de aserción
+
+Vitest no hace typecheck, así que un rojo de import no prueba que las aserciones muerdan. Con los
+tipos ya escritos y un **stub deliberado** de `obtenerResumen` que devolvía un resumen en ceros
+**sin llamar a `fetch`**, `Tests  4 failed | 93 passed (97)`:
+
+| Test | Aserción que rompió |
+|---|---|
+| `ObtenerResumen_DevuelveLosTotalesYElDesglose` | `TypeError: llamada is not a function or its return value is not iterable` — `fetch` nunca se llamó, así que no había ruta que inspeccionar: exactamente el fallo que corresponde a un cliente que no pide `/api/resumen` |
+| `ObtenerResumen_ConMesVacio_DevuelveCerosYDesgloseVacio` | `AssertionError: expected +0 to be 8 // Object.is equality` (el `mes`: los ceros del stub pasaban, el período no) |
+| `ObtenerResumen_ConErrorDelServidor_LanzaErrorDelServidorConTraceId` | `AssertionError: expected { mes: +0, anio: +0, …(4) } to be an instance of ErrorDelServidor` |
+| `ObtenerResumen_ConRedCaida_LanzaErrorDeRed` | `AssertionError: expected { mes: +0, anio: +0, …(4) } to be an instance of ErrorDeRed` |
+
+El stub se reemplazó por la implementación real —`pedir<ResumenMensual>('/resumen', {})`— en cuanto
+se capturó el rojo; **no quedó ningún resto en producción** (`git diff` de `cliente.ts`: 6 líneas, la
+función y su import).
+
+### Verde DESPUÉS: 4/4
+
+Suite frontend **completa**: `Test Files  9 passed (9)` / `Tests  97 passed (97)` (93 previos + 4
+nuevos), sin regresiones. `pnpm exec tsc --noEmit` limpio, `pnpm lint` limpio, `prettier --check`
+limpio.
+
+### Mutaciones que prueban que los tests muerden
+
+| # | Mutación | Qué cae |
+|---|---|---|
+| 1 | `anio` → `year` en `ResumenMensual` | **`tsc --noEmit`: 4 errores**, en las dos fixtures tipadas y en las dos aserciones — `error TS2353: Object literal may only specify known properties, and 'anio' does not exist in type 'ResumenMensual'` (líneas 55 y 68) y `error TS2339: Property 'anio' does not exist on type 'ResumenMensual'` (líneas 353 y 376). **`pnpm test` sigue en 97/97.** |
+| 2 | `obtenerResumen` arma query string (`/resumen?mes=8&anio=2026`) | `ObtenerResumen_DevuelveLosTotalesYElDesglose` → `AssertionError: expected '/api/resumen?mes=8&anio=2026' to be '/api/resumen'`. `Tests  1 failed \| 96 passed` |
+| 3 | `obtenerResumen` devuelve el JSON sin tipar (`Promise<unknown>` + `pedir<unknown>`) | **`tsc --noEmit`: 17 errores en total** — **16 `TS18046: 'resumen' is of type 'unknown'`**, uno por cada acceso a campo: **10 en el happy path** (`cliente.test.ts:352-361`, de `resumen.mes` a `resumen.desglose[1]?.categoriaNombre`) y **6 en el mes vacío** (`cliente.test.ts:371-376`, los tres ceros, el desglose vacío y el período); más **1 `TS6196: 'ResumenMensual' is declared but never used`** en `cliente.ts:8`, porque al destipar la función el import del contrato queda huérfano y `noUnusedLocals` lo delata |
+
+Las tres se revirtieron con `cp` de la copia previa; el `git diff --stat` final es el de la
+implementación y nada más.
+
+**Corrección posterior a la revisión.** La primera versión de esta tabla declaraba **10** errores
+para la mutación 3. Era falso: el conteo se tomó de una salida truncada con `head -8` en vez de
+contar `tsc` entero, y se perdieron los 6 del mes vacío y el `TS6196`. Lo detectó
+`daw-module-verifier`, que replicó la mutación y obtuvo 17. Los números de arriba son los de la
+corrida completa (`pnpm exec tsc --noEmit 2>&1 | grep -c "error TS"` → `17`; por código: 16
+`TS18046` + 1 `TS6196`). Queda anotado y no reescrito en silencio porque el argumento central de este
+bloque es "`pnpm test` no alcanza, hay que mirar `tsc`": si el número que se le pide a un humano que
+mire está mal contado en el mismo párrafo, el argumento se come a sí mismo.
+
+**Lo que la mutación 1 deja al descubierto, y es importante:** el tipo **sí** está ejercido por los
+tests —las fixtures se declaran `const RESUMEN_DE_AGOSTO: ResumenMensual = {...}` justamente para
+eso—, pero quien lo hace cumplir es `tsc`, **no Vitest**: este proyecto no tiene `typecheck` activado
+en la config de Vitest, así que `pnpm test` en verde no garantiza que los tipos cierren. La red de
+seguridad existe igual —`pnpm build` corre `tsc --noEmit && vite build`—, pero **correr solo
+`pnpm test` no alcanza para este bloque**: hay que correr también `tsc --noEmit`, que es lo que
+detecta un contrato desalineado con el backend.
+
+### Decisiones que la spec dejó abiertas
+
+1. **Dónde va `obtenerResumen` en el archivo.** Se ubicó junto a las otras dos lecturas
+   (`obtenerCategorias`, `obtenerMovimientos`) y antes de las escrituras, para que el archivo siga
+   leyéndose por tipo de operación y no por orden de llegada.
+2. **Cuán específicas son las aserciones del happy path.** Se comprueba **campo por campo** en vez de
+   un `toEqual` contra la fixture entera. Un `toEqual` contra el mismo objeto que se sirvió pasaría
+   aunque el tipo declarara nombres que el backend no emite: compararía el JSON consigo mismo. Los
+   accesos individuales (`resumen.totalIngresado`, `resumen.desglose[0]?.categoriaNombre`) son lo que
+   hace que la mutación 3 produzca **los 10 `TS18046` de este test** —de los 16 que da en total, ver
+   la tabla de mutaciones— en vez de ninguno: un `toEqual` sería un único acceso y no delataría nada.
+3. **El mes vacío también afirma el período.** La spec pide "ceros y desglose vacío"; el test agrega
+   `mes` y `anio`, porque el rótulo del Block 4 sale de la respuesta y un mes sin movimientos que
+   viniera sin período rompería la pantalla justo en el caso menos probado.
+4. **`ObtenerResumen_ConRedCaida_LanzaErrorDeRed` afirma además el negativo**
+   (`not.toBeInstanceOf(ErrorDelServidor)`): sin eso, un cliente que convirtiera todo en
+   `ErrorDelServidor` pasaría igual si `ErrorDeRed` heredara de él en el futuro.
+
+### Hallazgos fuera de alcance
+
+1. **Vitest sin `typecheck`.** Como explica la mutación 1, la config de Vitest
+   (`frontend/vitest.config.ts`) no habilita `test.typecheck`, así que ninguna violación de tipos
+   rompe `pnpm test`. Para un cliente HTTP cuyo valor está justamente en espejar el contrato del
+   backend, eso es un agujero real en la señal. **No se tocó** —es config compartida por toda la
+   suite, no del Block 3—. Candidato a ticket propio, junto con el del linter del backend.
+2. **Nada verifica que `ResumenMensual` y `ResumenMensualDto` sigan coincidiendo.** Hoy la
+   correspondencia la sostiene la revisión humana: si alguien renombra un campo en el record de C#,
+   el frontend compila, los 97 tests pasan y el número aparece `undefined` en pantalla. Un test de
+   contrato (esquema compartido o snapshot del JSON real) resolvería la clase entera de problema.
+   Fuera del alcance de este bloque, que solo puede espejar el DTO tal como está hoy.
+3. **`ErrorNoEncontrado` no se ejercita en `/api/resumen`.** El endpoint no devuelve 404 —el resumen
+   del mes en curso siempre existe, aunque esté en ceros—, así que no hay test para ese camino y no
+   se agregó ninguno: sería un test de un desenlace que el backend no produce.

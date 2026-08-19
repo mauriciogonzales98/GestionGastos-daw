@@ -10,8 +10,9 @@ import {
   modificarMovimiento,
   obtenerCategorias,
   obtenerMovimientos,
+  obtenerResumen,
 } from './cliente';
-import type { CrearMovimientoRequest, ModificarMovimientoRequest } from './tipos';
+import type { CrearMovimientoRequest, ModificarMovimientoRequest, ResumenMensual } from './tipos';
 import { json } from '../test/infra';
 
 const ALTA_VALIDA: CrearMovimientoRequest = {
@@ -43,6 +44,33 @@ const MOVIMIENTO_MODIFICADO = {
 const LISTADO_VACIO = { items: [], recortado: false, total: 0 };
 
 const NO_ENCONTRADO = { title: 'Movimiento no encontrado', status: 404 };
+
+/**
+ * El resumen tal como lo emite `GET /api/resumen`. Va tipado a propósito: si `ResumenMensual` deja
+ * de espejar al `ResumenMensualDto` del backend, el desajuste se ve acá al compilar y no en runtime
+ * como un `undefined` en pantalla.
+ */
+const RESUMEN_DE_AGOSTO: ResumenMensual = {
+  mes: 8,
+  anio: 2026,
+  totalIngresado: 300000,
+  totalGastado: 125500.75,
+  balance: 174499.25,
+  desglose: [
+    { categoriaId: 1, categoriaNombre: 'Comida', total: 100000.5 },
+    { categoriaId: 4, categoriaNombre: 'Transporte', total: 25500.25 },
+  ],
+};
+
+/** Un mes sin movimientos: ceros y desglose vacío, pero con el período igual de presente. */
+const RESUMEN_VACIO: ResumenMensual = {
+  mes: 8,
+  anio: 2026,
+  totalIngresado: 0,
+  totalGastado: 0,
+  balance: 0,
+  desglose: [],
+};
 
 /**
  * Simula `fetch` con una **fábrica** de respuestas y no con una instancia: el cuerpo de una
@@ -304,5 +332,74 @@ describe('cliente', () => {
     expect(fallo).toBeInstanceOf(ErrorDelServidor);
     expect((fallo as ErrorDelServidor).message).toBe('La API respondió 502.');
     expect((fallo as ErrorDelServidor).traceId).toBeNull();
+  });
+  it('ObtenerResumen_DevuelveLosTotalesYElDesglose', async () => {
+    const fetchFalso = fetchQueResponde(() => json(RESUMEN_DE_AGOSTO, 200));
+
+    const resumen = await obtenerResumen();
+
+    // El período lo fija el servidor (FR-03): la función no recibe parámetros y no arma query
+    // string, así que la ruta es exactamente esta y sin `?`.
+    const [ruta, opciones] = llamada(fetchFalso);
+    expect(ruta).toBe('/api/resumen');
+    expect(ruta).not.toContain('?');
+    expect(opciones.method).toBeUndefined();
+    expect(opciones.body).toBeUndefined();
+
+    // Campo por campo y no un `toEqual` del objeto entero: un nombre que no coincida con el DTO no
+    // rompe la compilación, llega como `undefined`, y un `toEqual` contra el mismo objeto que se
+    // sirvió no lo delataría.
+    expect(resumen.mes).toBe(8);
+    expect(resumen.anio).toBe(2026);
+    expect(resumen.totalIngresado).toBe(300000);
+    expect(resumen.totalGastado).toBe(125500.75);
+    expect(resumen.balance).toBe(174499.25);
+    expect(resumen.desglose).toHaveLength(2);
+    expect(resumen.desglose[0]?.categoriaId).toBe(1);
+    expect(resumen.desglose[0]?.categoriaNombre).toBe('Comida');
+    expect(resumen.desglose[0]?.total).toBe(100000.5);
+    expect(resumen.desglose[1]?.categoriaNombre).toBe('Transporte');
+  });
+
+  it('ObtenerResumen_ConMesVacio_DevuelveCerosYDesgloseVacio', async () => {
+    fetchQueResponde(() => json(RESUMEN_VACIO, 200));
+
+    const resumen = await obtenerResumen();
+
+    // El mes sin movimientos no es un caso de error ni una lista ausente: son ceros y un desglose
+    // vacío, y el período sigue viniendo para que la vista pueda rotularlo.
+    expect(resumen.totalIngresado).toBe(0);
+    expect(resumen.totalGastado).toBe(0);
+    expect(resumen.balance).toBe(0);
+    expect(resumen.desglose).toEqual([]);
+    expect(resumen.mes).toBe(8);
+    expect(resumen.anio).toBe(2026);
+  });
+
+  it('ObtenerResumen_ConErrorDelServidor_LanzaErrorDelServidorConTraceId', async () => {
+    fetchQueResponde(() =>
+      json(
+        { title: 'Se produjo un error inesperado.', status: 500, traceId: 'traza-resumen' },
+        500,
+        'application/problem+json',
+      ),
+    );
+
+    const fallo = await obtenerResumen().catch((error: unknown) => error);
+
+    // El manejo de errores es el heredado de `pedir`, no una segunda implementación: el `traceId`
+    // tiene que llegar igual que en el resto del cliente.
+    expect(fallo).toBeInstanceOf(ErrorDelServidor);
+    expect((fallo as ErrorDelServidor).message).toBe('Se produjo un error inesperado.');
+    expect((fallo as ErrorDelServidor).traceId).toBe('traza-resumen');
+  });
+
+  it('ObtenerResumen_ConRedCaida_LanzaErrorDeRed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+
+    const fallo = await obtenerResumen().catch((error: unknown) => error);
+
+    expect(fallo).toBeInstanceOf(ErrorDeRed);
+    expect(fallo).not.toBeInstanceOf(ErrorDelServidor);
   });
 });

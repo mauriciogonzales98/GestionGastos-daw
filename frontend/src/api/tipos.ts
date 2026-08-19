@@ -75,3 +75,28 @@ export interface ModificarMovimientoRequest {
   fecha: string;
   nota: string | null;
 }
+
+/**
+ * `ResumenMensualDto` del backend, el cuerpo del `GET /api/resumen`. Los nombres espejan el DTO
+ * real —`anio` y no `year`, `totalIngresado` y no `ingresos`—: un nombre que no coincida no rompe
+ * la compilación, llega como `undefined` en runtime. El período viaja en la respuesta porque lo
+ * fija el servidor (FR-03) y el rótulo tiene que salir del mismo lugar que el cálculo.
+ */
+export interface ResumenMensual {
+  mes: number;
+  anio: number;
+  totalIngresado: number;
+  totalGastado: number;
+  balance: number;
+  desglose: CategoriaConTotal[];
+}
+
+/**
+ * `CategoriaConTotalDto` del backend: una fila del desglose de gastos. Solo aparecen las
+ * categorías con al menos un gasto en el mes (FR-02); una categoría sin gastos no viene en cero.
+ */
+export interface CategoriaConTotal {
+  categoriaId: number;
+  categoriaNombre: string;
+  total: number;
+}

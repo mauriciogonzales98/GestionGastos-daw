@@ -111,3 +111,13 @@ textarea:disabled {
   margin: 0;
   padding: var(--espacio);
 }
+
+/*
+ * AC-03: el balance negativo se distingue por el signo menos en el texto —que es lo verificable por
+ * test y lo que anuncia un lector de pantalla— y este color lo refuerza. Es el mismo `--error` que
+ * ya usan `.aviso-error` y `.error-de-campo`, con su contraste 5.9:1 verificado arriba: el color es
+ * la ayuda, no la distinción.
+ */
+.balance-negativo {
+  color: var(--error);
+}

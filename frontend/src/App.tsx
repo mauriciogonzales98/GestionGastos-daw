@@ -3,6 +3,7 @@ import { FormularioMovimiento } from './movimientos/FormularioMovimiento';
 import { ConfirmarEliminacion } from './movimientos/ConfirmarEliminacion';
 import { FiltrosMovimientos } from './movimientos/FiltrosMovimientos';
 import { ListadoMovimientos } from './movimientos/ListadoMovimientos';
+import { ResumenDelMes } from './resumen/ResumenDelMes';
 import { mesActual } from './movimientos/mesActual';
 import type { ErroresPorCampo } from './api/cliente';
 import type { FiltrosDeMovimientos, MovimientoDto } from './api/tipos';
@@ -68,6 +69,8 @@ export default function App() {
   return (
     <main>
       <h1>Gestión de Gastos</h1>
+
+      <ResumenDelMes version={version} />
 
       {/* Un solo formulario a la vez: el de edición reemplaza al de alta mientras dura. Dos
           instancias simultáneas repetirían los `id` de los controles y sus etiquetas. La `key`

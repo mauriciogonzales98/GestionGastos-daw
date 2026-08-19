@@ -378,3 +378,155 @@ detecta un contrato desalineado con el backend.
 3. **`ErrorNoEncontrado` no se ejercita en `/api/resumen`.** El endpoint no devuelve 404 —el resumen
    del mes en curso siempre existe, aunque esté en ceros—, así que no hay test para ese camino y no
    se agregó ninguno: sería un test de un desenlace que el backend no produce.
+
+---
+
+## Block 4 — Frontend: el resumen en la pantalla principal
+
+**8 tests escritos. Rojo ANTES: 8/8.** Cinco viven en `frontend/src/resumen/ResumenDelMes.test.tsx`
+(el componente aislado) y tres en `frontend/src/App.test.tsx`, que son los que montan `App` entera:
+los dos del disparador (AC-06 y su inversa) y el de las dos peticiones independientes, que necesita
+el listado en pantalla para poder afirmar que no se cayó.
+
+### Ronda 1 — rojo de resolución
+
+Con los 8 tests escritos y ningún componente:
+
+```
+FAIL  src/resumen/ResumenDelMes.test.tsx [ src/resumen/ResumenDelMes.test.tsx ]
+Error: Failed to resolve import "./ResumenDelMes" from "src/resumen/ResumenDelMes.test.tsx". Does the file exist?
+
+FAIL  src/App.test.tsx > Resumen en la pantalla principal > Resumen_AlFiltrarElListado_NoCambia
+TestingLibraryElementError: Unable to find role="region" and name "Resumen del mes"
+```
+
+`Tests  3 failed | 97 passed (100)`: los 5 del archivo nuevo ni siquiera se recolectaron.
+
+### Ronda 2 — rojo de aserción
+
+Un rojo de import no prueba que las aserciones muerdan. Con un **stub deliberado** —la sección con
+su `aria-label`, los tres rótulos en `ARS 0,00`, el período como `"Mes en curso"`, sin `fetch` y sin
+desglose— los 8 fallan por lo que cada uno afirma. `Tests  8 failed | 97 passed (105)`:
+
+| Test | Aserción que rompió |
+|---|---|
+| `Resumen_MuestraLosTresTotalesYElMes` | `TestingLibraryElementError: Unable to find an element with the text: Agosto 2026` (el rótulo sale de la respuesta, no del reloj) |
+| `Resumen_ConBalanceNegativo_LoMuestraConSigno` | `Unable to find an element with the text: Febrero 2026` |
+| `Resumen_MuestraElDesglosePorCategoria` | `Unable to find role="listitem"` |
+| `Resumen_SinGastosEnElMes_DiceQueNoHayNadaQueDesglosar` | `Unable to find an element with the text: /no hay gastos para desglosar/i` |
+| `Resumen_ConRedCaida_MuestraElErrorConReintento` | `Unable to find role="alert"` |
+| `Resumen_AlFiltrarElListado_NoCambia` | `Unable to find an element with the text: Agosto 2026` |
+| `Resumen_TrasUnAlta_SeActualiza` | `Unable to find an element with the text: Agosto 2026` |
+| `Resumen_ConErrorDelServidor_NoTumbaElListado` | `Unable to find role="alert"` |
+
+El stub se reemplazó por la implementación real en cuanto se capturó el rojo; **no quedó ningún
+resto en producción** (`ResumenDelMes.tsx` no contiene ni el texto `"Mes en curso"` ni el
+`void version`).
+
+Los tres totales del stub ya venían en `ARS 0,00`, así que las aserciones de ceros de
+`Resumen_SinGastosEnElMes_DiceQueNoHayNadaQueDesglosar` pasaban con el stub: lo que rompe ese test
+es el texto del desglose vacío, que es lo que AC-02 pide de nuevo respecto del resto.
+
+### Verde DESPUÉS: 8/8
+
+Suite frontend **completa**: `Test Files  10 passed (10)` / `Tests  105 passed (105)` (97 previos +
+8 nuevos), sin regresiones. `pnpm exec tsc --noEmit` limpio, `pnpm lint` limpio,
+`prettier --check .` limpio.
+
+### Mutaciones que prueban que los tests muerden
+
+Las dos del disparador, que son las que este bloque se juega:
+
+| # | Mutación | Qué cae |
+|---|---|---|
+| 1 | El resumen se suscribe a `filtros`: prop nueva en `PropsResumenDelMes`, cableada desde `App`, y `filtros` agregado a las deps del efecto | `Resumen_AlFiltrarElListado_NoCambia` → `AssertionError: expected 2 to be 1 // Object.is equality` en `expect(servidor.lecturasDelResumen()).toBe(1)` (`App.test.tsx:554`). `Tests  1 failed \| 104 passed (105)` |
+| 2 | Se quita `version` de las deps del efecto (`}, [cargar]);`) | `Resumen_TrasUnAlta_SeActualiza` → `AssertionError: expected 'ARS 0,00' to be 'ARS 1.500,50'` en el `waitFor` sobre el total gastado. `Tests  1 failed \| 10 passed (11)` en `App.test.tsx` |
+
+Las dos se revirtieron con `cp` de la copia previa; el árbol quedó confirmado con `git status`
+(`M App.test.tsx`, `M App.tsx`, `M movimientos/FiltrosMovimientos.test.tsx`, `?? src/resumen/`) y la
+suite volvió a `105 passed (105)`.
+
+**Lo que la mutación 1 deja al descubierto:** los números del resumen **no** cambian al filtrar
+aunque el resumen se resuscriba mal —el endpoint no acepta período, así que la segunda respuesta es
+idéntica a la primera—. Es decir: mirar la pantalla no distingue las dos formas de equivocarse. Lo
+único que las distingue es **contar las peticiones**, y por eso el doble de `App.test.tsx` lleva
+`lecturasDelResumen()`. Un test que solo comparara los importes daría verde con AC-06 violado.
+
+### Decisiones que la spec dejó abiertas
+
+1. **Dónde se monta el resumen.** Justo debajo del `<h1>`, antes del formulario de alta: es la
+   respuesta a "cómo vengo este mes" y lo primero que la pantalla tiene que contestar. La spec dice
+   "la pantalla principal" sin fijar la posición.
+2. **La moneda del resumen.** `ResumenMensual` no trae `moneda` —el PRD deja los totales por moneda
+   fuera de alcance—, así que el componente formatea con la constante `MONEDA = 'ARS'` reusando
+   `formatearMonto` del listado, para que el mismo importe se lea igual arriba y en la tabla. Si
+   alguna vez hay una segunda moneda, esto es lo primero que hay que tocar y está en una sola línea.
+3. **Los nombres de mes van escritos, no por `Intl`.** `Intl.DateTimeFormat` los devuelve en
+   minúscula y con variaciones entre builds de ICU, y obligaría a construir un `Date` —con su huso—
+   para rotular un período que ya viene desarmado en dos números.
+4. **Los tres tests que montan `App` viven en `App.test.tsx`.** La spec no dice en qué archivo. Se
+   eligió ese porque el doble con estado ya está ahí y es el que la spec manda extender: duplicarlo
+   en `ResumenDelMes.test.tsx` habría dado dos servidores falsos que se desincronizan.
+5. **El doble de `App.test.tsx` devuelve el resumen en cero por omisión.** Con `resumen: 'calculado'`
+   —solo los tres tests del resumen— agrega los movimientos que tiene guardados. Devolver siempre
+   los números derivados del listado volvería ambiguas las búsquedas por texto de los ocho tests
+   preexistentes: `ARS 1.500,50` estaría en la fila, en el total gastado y en el desglose, y
+   `getByText` fallaría con "Found multiple elements" en tests que no tienen nada que ver con esto.
+6. **El rótulo del período va en su propio `<p className="periodo">`**, separado del `<h2>`, para que
+   `getByText('Agosto 2026')` sea una coincidencia exacta y no un `toContain` sobre el encabezado.
+7. **Un fallo de carga no conserva los números viejos.** Se limpia el resumen y se muestra solo el
+   aviso: un resumen que falló mostrando lo anterior no se distingue de uno al día.
+8. **AC-03 se afirma sobre el texto.** `expect(total('Balance')).toBe('ARS -150,50')`. La clase
+   `balance-negativo` se emite —es lo que la spec pide para el color— pero ningún test la mira.
+
+### Hallazgos fuera de alcance
+
+1. **`FiltrosMovimientos.test.tsx` también monta `App`, y hubo que tocarlo.** La lista de archivos
+   del bloque solo prevé `App.test.tsx` como doble a extender, pero
+   `frontend/src/movimientos/FiltrosMovimientos.test.tsx` monta `App` entera en sus 9 tests
+   (deliberadamente: su criterio de cierre es "qué URL se pide"). Con el resumen montado, su doble
+   respondía `throw new Error('Ruta no esperada en el test: /api/resumen')` y
+   `Filtros_ConRedCaida_MuestraElErrorConReintento` rompía en
+   `AssertionError: expected 'No pudimos cargar el resumen del mes:…' to contain 'No pudimos conectar con el servidor.'`:
+   su `findByRole('alert')` estaba encontrando el aviso del resumen. **Se agregó la rama
+   `/api/resumen` devolviendo el resumen en cero**, en el helper compartido y en el doble inline de
+   ese test; **ninguna aserción existente se tocó**. Es el mismo cambio que la spec manda hacer en
+   `App.test.tsx`, en un archivo que la spec no listó porque no consta que monte `App`.
+2. **~~`tokens.css` no tiene regla para `.balance-negativo`~~ — RESUELTO tras la revisión.** El
+   hallazgo original decía que el color de AC-03 quedaba sin definir porque la hoja de estilos no
+   estaba en la lista de archivos del bloque. El diagnóstico estaba incompleto: **el proyecto ya
+   tenía el token exacto**, `--error: #b3261e`, con su contraste 5.9:1 documentado en la cabecera de
+   `frontend/src/estilos/tokens.css` y ya en uso por `.aviso-error` y `.error-de-campo`. No faltaba
+   una decisión de diseño, faltaba una línea con un color ya elegido y ya validado, y la spec la
+   pedía explícitamente ("el signo menos explícito en el texto **más** una clase CSS propia para el
+   color"). Se agregó al final de `tokens.css`, que es donde vive `.aviso-error` —el CSS del proyecto
+   es una sola hoja, no hay archivo por componente—:
+
+   ```css
+   .balance-negativo {
+     color: var(--error);
+   }
+   ```
+
+   Se eligió `var(--error)` y no un color nuevo por dos razones: el contraste ya está verificado
+   contra el fondo (5.9:1, por encima del 4.5:1 que pide texto normal) y reusa el mismo rojo con el
+   que la aplicación ya dice "acá hay algo que mirar". **Ningún test cambió**: la spec fija que la
+   distinción verificable es el signo en el texto, y asertar sobre la clase volvería a atar el test a
+   los estilos. Los 8 siguen como estaban.
+3. **Las demás clases del resumen siguen sin regla, y es lo normal en este proyecto.**
+   `.resumen-del-mes`, `.periodo`, `.totales`, `.total`, `.balance`, `.desglose` y `.categoria` son
+   ganchos de maquetación, no de color, y no se inventaron reglas para ellas porque implican
+   decisiones de diseño que el proyecto no tomó todavía (disposición de los tres totales, separación
+   del desglose, jerarquía tipográfica). No es una deuda de este bloque: `tokens.css` tampoco tiene
+   reglas para `.filtros`, `.acciones`, `.dialogo`, `.rango-vigente`, `.aviso-recorte`,
+   `.aviso-desaparecido`, `.aviso-definitivo` ni `.nota-del-dialogo`, todas de FEAT-001a y FEAT-001b.
+   Lo que sí está resuelto en la hoja es todo lo semántico —el color del error, el foco visible, el
+   contraste—. Una pasada de diseño sobre la pantalla entera es un ticket propio.
+4. **Vitest sigue sin `typecheck`** (ya anotado en el Block 3): `pnpm test` en verde no dice nada
+   sobre los tipos. Este bloque volvió a correr `tsc --noEmit` a mano por eso.
+5. **Nadie verifica que el mes del resumen y el del filtro por defecto coincidan.** El resumen rotula
+   con lo que devuelve el servidor y los filtros se inicializan con `mesActual()` del navegador: si
+   el reloj del cliente y el del servidor cayeran en meses distintos —fin de mes, husos cruzados—, la
+   pantalla mostraría el resumen de un mes y el listado de otro, cada uno rotulado correctamente. Es
+   coherente con lo que el PRD decidió (el resumen no sigue al filtro) y no hay test que lo cubra
+   porque no hay comportamiento definido para ese caso.

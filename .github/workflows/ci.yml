@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+# Solo lectura del repo: el workflow no comenta, no etiqueta y no publica nada, así que el token
+# no necesita permisos de escritura. Si algún día un job los precisa, se los agrega ese job y no
+# el archivo entero.
+permissions:
+  contents: read
+
+# Un push nuevo sobre el mismo PR cancela la corrida anterior: lo que importa es el último commit.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend — lint, tipos y tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm antes que Node: setup-node necesita encontrarlo para resolver su caché.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # --frozen-lockfile: si el lockfile no coincide con package.json, falla en vez de resolver
+      # versiones nuevas por su cuenta. Una corrida de CI no es el lugar donde se decide una versión.
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Formato
+        run: pnpm format
+
+      # El type checker va aparte de los tests: Vitest transpila sin chequear tipos, así que un
+      # error de tipos no aparecería en la suite.
+      - name: Type checker
+        run: pnpm exec tsc --noEmit
+
+      - name: Tests
+        run: pnpm test
+
+  backend:
+    name: Backend — build y tests
+    runs-on: ubuntu-latest
+
+    # Los tests corren contra MySQL real por ADR-002: el tipo de columna y las restricciones del
+    # esquema son justamente lo que verifican, y un proveedor en memoria es ciego a eso. El service
+    # container corre en el propio runner —no es un servicio externo— y se destruye con el job.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          # Base efímera, sin contraseña: así no hay ningún secreto que escribir en este archivo ni
+          # que guardar en el repositorio. Vive lo que dura el job y nadie más la alcanza.
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: gestiongastos_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restaurar
+        run: dotnet restore backend/GestionGastos.sln
+
+      # -warnaserror es lo más cercano a un linter que hoy tiene el backend: no hay analizador de
+      # estilo configurado. Que un warning nuevo rompa el PR es la parte que sí se puede exigir.
+      - name: Build
+        run: dotnet build backend/GestionGastos.sln --no-restore -warnaserror
+
+      # El fixture crea y migra gestiongastos_test por su cuenta; acá solo hace falta que el
+      # servidor esté arriba y que la variable exista. Sin ella el fixture lanza a propósito, en vez
+      # de adivinar una base (ADR-002).
+      #
+      # Se excluyen los tests de rendimiento: miden tiempo de pared (p95 < 1s) y en un runner
+      # compartido dan rojos que no dicen nada del código. Siguen corriendo en local, que es donde
+      # la medición significa algo.
+      - name: Tests
+        run: >-
+          dotnet test backend/GestionGastos.sln --no-build
+          --filter "FullyQualifiedName!~Rendimiento"
+        env:
+          ConnectionStrings__Default: "Server=127.0.0.1;Port=3306;Database=gestiongastos_test;User ID=root;AllowPublicKeyRetrieval=true;"

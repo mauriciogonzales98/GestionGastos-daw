@@ -250,6 +250,124 @@ mutaciones fueron revertidas y `cliente.ts` se restauró desde la copia previa a
 
 ---
 
+## Block 5 — Frontend: controles de filtro
+
+**10 tests exigidos por la spec + 3 extra. Primera corrida: 14 en rojo, 50 en verde** — los 50
+verdes son los que la suite ya traía de FEAT-001a y del Block 4, que este bloque conserva. El
+archivo `mesActual.test.ts` ni siquiera llegó a ejecutarse: sus 3 tests fallaron en la resolución
+del import, que es la forma que toma "el módulo todavía no existe".
+
+| Test | Aserción que rompía |
+|---|---|
+| `mesActual_DevuelveElPrimeroYElUltimoDiaDelMes` | `Error: Failed to resolve import "./mesActual" from "src/movimientos/mesActual.test.ts". Does the file exist?` |
+| `mesActual_ElUltimoDiaPorLaNoche_NoSeCorreAlMesSiguiente` (extra) | ídem — el archivo entero contó como `(0 test)` |
+| `mesActual_SinArgumento_UsaLaFechaDelSistema` (extra) | ídem |
+| `Filtros_AlAbrir_PideElMesActual` | `expected '/api/movimientos' to be '/api/movimientos?desde=2026-03-01&hasta=2026-03-31'` |
+| `Filtros_AlElegirCategoria_LaPasaAlCliente` | `TestingLibraryElementError: Unable to find a label with the text of: Filtrar por categoría` |
+| `Filtros_AlAplicarUnRango_LoPasaAlCliente` | `Unable to find a label with the text of: Desde` |
+| `Filtros_AlAplicarCategoriaYRango_PasaLosDos` | `Unable to find a label with the text of: Filtrar por categoría` |
+| `Filtros_ConDesdePosteriorAHasta_MuestraElMotivoYNoPide` | `Unable to find a label with the text of: Desde` |
+| `Filtros_ConRangoInvalido_MantieneElListadoAnterior` | `Unable to find a label with the text of: Desde` |
+| `Filtros_ConRechazoDelServidor_MuestraElMensajePorCampo` | `Unable to find a label with the text of: Desde` |
+| `Listado_MuestraElRangoVigente` | `Unable to find an element with the text: Mostrando movimientos del 01/08/2026 al 31/08/2026.` |
+| `Listado_MuestraGastosEIngresos_OrdenadosPorFecha` (reescrito) | `expected [ '/api/movimientos' ] to deeply equal [ '/api/movimientos?desde=2026-08-01&hasta=2026-08-31' ]` |
+| `Listado_TrasUnAlta_MuestraElMovimientoNuevo` (reescrito) | `expected [ '/api/movimientos', …(1) ] to deeply equal [ …(2) ]` |
+| `Listado_AlCambiarLosFiltros_VuelveAPedirConElRangoNuevo` (extra) | `Unable to find an element with the text: /todavía no hay movimientos/i` — el listado no reaccionaba al cambio de filtros |
+| `Listado_SinMovimientos_MuestraEstadoVacio` (reescrito) | `Unable to find an element with the text: Mostrando movimientos del 01/08/2026 al 31/08/2026.` |
+| `App_TrasUnAltaDeGasto_ElListadoMuestraElMovimientoNuevo` (reescrito) | `expected [ '/api/movimientos' ] to deeply equal [ Array(1) ]` |
+| `App_TrasUnAltaDeIngreso_ElListadoMuestraElMovimientoNuevo` (reescrito) | ídem |
+
+### Dos tests que pasaron de entrada y hubo que endurecer
+
+- `Filtros_SinTocarLaCategoria_NoMandaCategoriaId` (extra, AC-08) afirmaba
+  `expect(url).not.toContain('categoriaId')`, que era cierto **porque el listado no mandaba ningún
+  filtro**: el mismo agujero que el Block 4 encontró en su propio archivo. Se endureció comparando
+  la URL entera contra `/api/movimientos?desde=2026-08-01&hasta=2026-08-31`, que un cliente sin
+  filtros no puede producir.
+- `Filtros_ConRedCaida_MuestraElErrorConReintento` daba verde contra el manejo de `ErrorDeRed` que
+  el listado ya tenía desde FEAT-001a. Se endureció asertando que **las dos** lecturas —la que falla
+  y la del reintento— llevan el rango, con lo cual queda atado a este bloque y no al anterior.
+
+Las dos, ya endurecidas, mueren con la mutación 2 de la tabla de abajo.
+
+**Después: 67/67 en verde** (8 archivos, 64 previos + los 3 nuevos de `mesActual` — 14 tests nuevos
+en total y 3 archivos de test reescritos). `tsc --noEmit` sin errores, `eslint` y `prettier --check`
+limpios.
+
+### Mutaciones que prueban que los tests muerden
+
+| Mutación | Test que la atrapa | Salida |
+|---|---|---|
+| `mesActual` derivando el mes de `ahora.toISOString()` en vez de los componentes locales | `mesActual_ElUltimoDiaPorLaNoche_NoSeCorreAlMesSiguiente` | `expected { desde: '2026-09-01', …(1) } to deeply equal { desde: '2026-08-01', …(1) }` |
+| `ListadoMovimientos` llamando `obtenerMovimientos()` sin los filtros | **12 tests**, entre ellos `Filtros_AlAbrir_PideElMesActual` | `expected '/api/movimientos' to be '/api/movimientos?desde=2026-03-01&hasta=2026-03-31'` |
+| `aplicar()` sin la guarda de rango invertido: la petición sale igual | `Filtros_ConDesdePosteriorAHasta_MuestraElMotivoYNoPide` y `Filtros_ConRangoInvalido_MantieneElListadoAnterior` | `expected '' to be 'La fecha de inicio no puede ser poste…'` |
+
+**Un mutante que sobrevivió, y por qué no importa.** La primera mutación probada fue
+`new Date(anio, mes, 1).toISOString().slice(0, 10)` —el `toISOString()` clásico— y quedó viva:
+67/67 en verde. No es un agujero de los tests sino un **mutante equivalente en este huso**. El
+`Date` construido es la medianoche local; en UTC-3 pasar a UTC suma 3 horas y el día no se mueve.
+El desplazamiento aparece con husos positivos, o —y esto sí ocurre acá— cuando lo que se convierte
+es el instante **actual** en vez de una medianoche construida, que es la mutación que la tabla
+registra y que el test de las 23:30 mata. El caso peligroso en UTC-3 es el que está cubierto.
+
+### Decisiones que la spec dejó abiertas
+
+1. **Los filtros se aplican con un botón**, no a cada tecla. Un `<input type="date">` a medio
+   completar emite valores intermedios, y pedirle al servidor cada uno sería una petición por dígito
+   contra un rango que el usuario todavía no terminó de escribir. AC-12 —"mantener el listado con el
+   rango anterior"— además presupone un momento explícito de aplicación: sin él, "el rango anterior"
+   no está definido.
+2. **`FiltrosMovimientos` carga su propio catálogo de categorías**, como hace `FormularioMovimiento`.
+   Levantarlo a `App` para compartir una sola lectura obligaba a tocar `FormularioMovimiento.tsx`,
+   que no es un archivo de este bloque. Queda como candidato para cuando el Block 6 vuelva sobre ese
+   componente.
+3. **El rechazo del servidor sube por `onErroresDeFiltro` hasta `App`**, que lo baja a
+   `FiltrosMovimientos`. El error lo detecta quien hace la petición (el listado), pero el control que
+   el usuario tiene que corregir vive en el filtro: el estado se sostiene en el padre común, que es
+   el único punto desde el que las dos mitades se ven.
+4. **Un `ErrorDeValidacion` del listado se muestra sin botón "Reintentar"**, a diferencia de un
+   `ErrorDeRed`: reintentar el mismo filtro rechazado daría el mismo rechazo. El camino de salida es
+   el mensaje por campo, junto al control.
+
+### Revisión de comentarios de los archivos tocados
+
+- `ListadoMovimientos.tsx`, comentario del efecto: decía *"Recargar cuando `version` cambia (tras un
+  alta) es sincronizar con la API"*. Quedaba **incompleto**: ahora también recarga cuando cambian
+  los filtros, por la dependencia `cargar`. Se reescribió nombrando los dos disparadores.
+- `ListadoMovimientos.tsx`, doc de la prop `version`: seguía siendo exacta y se conservó palabra por
+  palabra. La prop no cambió de sentido: un alta no altera el filtro vigente, así que sin ella la
+  recarga tras el alta no tendría disparador.
+- `ListadoMovimientos.tsx`, comentario *"Mismo patrón que `FormularioMovimiento`: el reset síncrono
+  lo hace `reintentar`"*: sigue describiendo lo que el código hace. Sin cambios.
+- `App.tsx`, comentario sobre la señal `version`: era el candidato a quedar obsoleto con este
+  bloque, porque ahora hay un segundo motivo de recarga. **No lo quedó, pero sí incompleto**: se
+  amplió para decir por qué la señal sigue haciendo falta habiendo filtros —un alta no cambia el
+  filtro vigente— en vez de dejar al lector suponiendo que es un resto del bloque anterior.
+- `ListadoMovimientos.test.tsx`, comentario *"La primera fila es el encabezado"*: sigue exacto. El
+  del `rerender` que *"simula el refresco tras un alta exitosa"* también, y se mantiene: ese archivo
+  prueba el componente aislado; la costura de verdad la ejercen `App.test.tsx` y
+  `FiltrosMovimientos.test.tsx` montando `App`.
+- `App.test.tsx`, comentario de `prepararFetch`: decía que enruta *"por endpoint —no por orden de
+  llamadas—"*, lo cual seguía siendo cierto pero ya no completo: el doble ahora **honra la query
+  string**. Se amplió con esa mitad y con el motivo, que es el defecto que el impact scan detectó.
+- `App.test.tsx`, comentario de la cota superior de lecturas: nombraba a `cargar` como *"un
+  `useCallback([])`"*, y eso pasó a ser **falso** —ahora depende de `filtros`—. Se corrigió.
+- `formato.ts` y `fecha.ts`: no se tocaron, pero se leyeron porque `mesActual` reutiliza
+  `hoyComoIso`. Sus dos comentarios sobre por qué no pasan por `toISOString()`/`Date` siguen
+  exactos, y son la razón de que `mesActual` delegue en `hoyComoIso` en vez de formatear por su
+  cuenta.
+
+### Hallazgo fuera de alcance
+
+`ListadoMovimientos.test.tsx` llamaba `vi.stubGlobal('fetch', …)` en cada test pero su `afterEach`
+solo hacía `vi.restoreAllMocks()`, que **no desmonta los globales**: el `fetch` falso sobrevivía al
+archivo. No dio problemas porque cada test lo vuelve a pisar, pero es una fuga. Se agregó
+`vi.unstubAllGlobals()` a ese `afterEach` —el archivo es de este bloque— y se puso desde el
+principio en los dos archivos nuevos. `FormularioMovimiento.test.tsx` tiene la misma omisión y **no
+se tocó**: no es un archivo de este bloque.
+
+---
+
 ## Errata de la spec — pendiente de aplicar en el PLAN de FEAT-001c
 
 Misma situación que las diez erratas que FEAT-001a heredó a este ticket, y por el mismo motivo

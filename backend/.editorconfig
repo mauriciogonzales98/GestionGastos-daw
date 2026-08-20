@@ -1,0 +1,73 @@
+# Reglas del linter del backend (FIX-001).
+#
+# ================================================================================================
+#  DOS REGLAS QUE GOBIERNAN ESTE ARCHIVO — leelas antes de agregar la sexta supresión
+# ================================================================================================
+#
+#  1. SUPRESIONES POR ID DE REGLA, NUNCA POR CATEGORÍA.
+#     Prohibido `dotnet_analyzer_diagnostic.category-*.severity` y cualquier comodín. Solo
+#     `dotnet_diagnostic.CAxxxx.severity` con el id exacto.
+#
+#     Y ninguna regla de las categorías **Security** o **Reliability** puede sumarse a esta lista
+#     sin un threat model propio. El motivo está en docs/daw/security/threat-FIX-001.md (R-02):
+#     este archivo nace con cinco reglas apagadas, todas con buen motivo, y eso vuelve
+#     indistinguible apagar CA1707 de apagar CA2100 (SQL por concatenación) o CA5350 (cripto
+#     débil). Si una regla de seguridad molesta, el problema casi nunca es la regla.
+#
+#  2. LA EXCLUSIÓN DE CÓDIGO GENERADO SE ACOTA AL DIRECTORIO EXACTO.
+#     Con prefijo de proyecto y sin comodines que puedan alcanzar código escrito a mano. Un patrón
+#     ancho apagaría los analizadores —los de seguridad incluidos— sobre archivos reales sin que
+#     nada lo indique: los hallazgos simplemente dejarían de aparecer (R-05).
+#
+# ================================================================================================
+
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+
+# --- Supresiones en producción -------------------------------------------------------------------
+
+# CA1725 (Naming) — pide renombrar a inglés parámetros que este proyecto nombra en español
+# (`constructor`, `lector`, `escritor`) para coincidir literalmente con las clases base de EF Core y
+# de System.Text.Json. Son 9 hallazgos en 6 miembros. Obedecerla es traducir la convención del
+# proyecto a la de la clase base; el nombre en español es deliberado.
+dotnet_diagnostic.CA1725.severity = none
+
+# CA1050 (Design) — "Declare types in namespaces" sobre Program.cs. Es un artefacto de los
+# top-level statements de la minimal API: el tipo que la regla señala lo genera el compilador, no
+# lo escribió nadie.
+dotnet_diagnostic.CA1050.severity = none
+
+# --- Código generado por Entity Framework --------------------------------------------------------
+# Acotado a este directorio exacto (ver regla 2 del encabezado). Sin esto, cada migración futura
+# entraría con hallazgos que nadie escribió y que con TreatWarningsAsErrors rompen el build — que es
+# la forma en que un linter termina apagado a los dos meses.
+[GestionGastos.Api/Migrations/*.cs]
+generated_code = true
+
+# --- Supresiones en el proyecto de tests ---------------------------------------------------------
+[GestionGastos.Api.Tests/**.cs]
+
+# CA1707 (Naming) — pide quitar los guiones bajos. `Modificar_DeOtroPropietario_Devuelve404` es la
+# convención `Sujeto_Escenario_Resultado` que las specs de este proyecto exigen nombre por nombre.
+# Son 117 tests: obedecerla sería renombrarlos a todos para empeorarlos.
+dotnet_diagnostic.CA1707.severity = none
+
+# CA1711 (Naming) — pide renombrar `BaseDeDatosCollection` por terminar en "Collection", que es
+# justamente la convención de xUnit para los fixtures de colección. Renombrarla tocaría los 16
+# archivos que la referencian vía [Collection(BaseDeDatosCollection.NombreDeLaColeccion)], en un
+# ticket cuyo NFR-02 exige no cambiar comportamiento (AC-12 del PRD).
+dotnet_diagnostic.CA1711.severity = none
+
+# CA1861 (Performance) — pide sacar a campos `static readonly` los arrays literales que se pasan como
+# argumento. Los 12 hallazgos son todos valores ESPERADOS dentro de un Assert.Equal
+# (`Assert.Equal(new[] { "gasto", "ingreso" }, ...)`). Hoistearlos separaría cada expectativa de su
+# aserción y agregaría 12 campos con nombres inventados, a cambio de un beneficio de rendimiento que
+# no existe: el motivo de la regla es un método llamado repetidamente, y un assert de un test corre
+# una vez. Queda ACTIVA en GestionGastos.Api, que es donde su motivo sí aplica.
+dotnet_diagnostic.CA1861.severity = none

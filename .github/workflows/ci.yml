@@ -115,3 +115,13 @@ jobs:
           --filter "FullyQualifiedName!~Rendimiento"
         env:
           ConnectionStrings__Default: "Server=127.0.0.1;Port=3306;Database=gestiongastos_test;User ID=root;AllowPublicKeyRetrieval=true;"
+
+      # La barrera del linter es configuración, y una barrera de configuración se puede desarmar en
+      # silencio: alguien pone EnforceCodeStyleInBuild en false y el build sigue verde. Este paso es
+      # lo único que se pone en rojo cuando eso pasa. Verifica las dos direcciones — una violación
+      # deliberada rompe el build en código escrito a mano y no lo rompe dentro de Migrations/.
+      #
+      # Va ÚLTIMO a propósito: compila con un archivo temporal adentro, así que correrlo antes
+      # invalidaría el --no-build del paso de Tests.
+      - name: Barrera del linter
+        run: ./backend/verificar-linter.sh

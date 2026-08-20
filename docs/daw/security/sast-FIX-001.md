@@ -126,3 +126,64 @@ La exclusión alcanza exactamente al directorio declarado y a nada más.
 │  Total: 0 vulnerabilidades (0 Critical, 0 High, 0 Medium)    │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+# Ronda 2 — tras el bucle correctivo
+
+| Field | Value |
+|-------|-------|
+| Fecha | 2026-08-20 |
+| Motivo | Verificación ronda 1 BLOCKED: el test de regresión no existía en forma repetible |
+| Alcance nuevo | `backend/verificar-linter.sh` (nuevo), `backend/.editorconfig`, `.github/workflows/ci.yml` |
+
+## Superficie nueva: un script que escribe en el repo y compila
+
+`backend/verificar-linter.sh` es la única superficie realmente nueva de esta ronda, y merece
+análisis propio porque hace dos cosas que un script de verificación normalmente no hace: **escribe
+archivos dentro del árbol de fuentes** y **ejecuta compilaciones**.
+
+| Categoría | Resultado |
+|---|---|
+| F-SAST-01 secretos | ✅ 0 credenciales; no lee variables de entorno |
+| F-SAST-03 inyección de comandos | ✅ No toma argumentos externos. La única expansión es `$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)`, entrecomillada; el `$1` de `escribirViolacion` es un parámetro interno con dos valores literales |
+| F-SAST-05 path traversal | ✅ Las 4 rutas son literales derivadas de la ubicación del script, todas entrecomilladas. Ninguna sale de entrada de usuario |
+| F-SAST-04 funciones inseguras | ✅ 0 `eval`, `curl`, `wget`. El heredoc está entrecomillado (`<<'CS'`), así que no expande nada |
+| Residuos | ✅ `set -euo pipefail` + `trap limpiar EXIT`: el archivo temporal se borra aunque el script se interrumpa. Verificado con `git status` limpio tras cada corrida |
+| Escalada de privilegios en CI | ✅ Corre con los permisos que el job ya tiene; no agrega `permissions` ni consume secretos |
+
+**El archivo temporal se llama `_PruebaDelLinter.cs` y lleva un comentario que dice qué es y que hay
+que borrarlo si aparece commiteado.** Es la mitigación de que quede colgado: un `.cs` suelto dentro
+de `GestionGastos.Api/` entra en la compilación por el globbing del SDK y rompería el build de todos.
+
+## Revalidación de R-02 tras el cambio de alcance
+
+El fix de W-1 movió CA1725 y CA1050 de la sección global `[*.cs]` a `[GestionGastos.Api/**.cs]`. La
+tabla de categorías **no cambia** y sigue siendo la referencia contra la que diffear una supresión
+futura:
+
+| Regla | Sección | Categoría | ¿Security o Reliability? |
+|---|---|---|---|
+| CA1725 | `[GestionGastos.Api/**.cs]` | Naming | no |
+| CA1050 | `[GestionGastos.Api/**.cs]` | Design | no |
+| CA1707 | `[GestionGastos.Api.Tests/**.cs]` | Naming | no |
+| CA1711 | `[GestionGastos.Api.Tests/**.cs]` | Naming | no |
+| CA1861 | `[GestionGastos.Api.Tests/**.cs]` | Performance | no |
+
+**0 supresiones bajo `[*.cs]`.** Cada una vive ahora en la sección del proyecto al que su motivo
+aplica, que además reduce el alcance respecto de la ronda 1.
+
+## Revalidación de R-05
+
+Lo que en la ronda 1 era una comprobación manual descrita en prosa ahora es el paso 3 de
+`verificar-linter.sh`, y corre en el CI. Además se verificó que el script **falla** cuando la
+barrera se desarma: con `EnforceCodeStyleInBuild=false` sale con código 1 y nombra el archivo a
+revisar.
+
+## Resultado ronda 2
+
+```
+Total: 0 vulnerabilidades (0 Critical, 0 High, 0 Medium) · 0 supresiones
+Dependencias: 0 nuevas
+```
+

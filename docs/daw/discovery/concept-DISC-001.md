@@ -108,6 +108,12 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
   configuración de Vitest no tienen requerimientos funcionales ni criterios de aceptación de
   producto que valga la pena escribir. Se clasifican como FIX o QUICK-FIX cuando les toque, con su
   fix-brief.
+- **2026-08-20: los datos del usuario semilla se descartan en la migración de `1a`.** Decisión del
+  usuario. Son datos de desarrollo, no de un usuario real: la aplicación arranca vacía y la primera
+  cuenta empieza de cero. Se pierde lo cargado probando, a cambio de no dejar en el modelo una
+  lógica de adopción que corre una sola vez en la vida del producto.
+- **2026-08-20: la autenticación se parte en tres desde acá, no en DEFINE.** Decisión del usuario.
+  El límite de intentos fallidos sale a `1b` en vez de esperar a que el PLAN descubra que no entra.
 - **2026-08-20: el dashboard va después de multi-moneda, no antes.** Los dos reescriben la
   agregación de totales; hacerlo al revés es escribirla dos veces.
 
@@ -115,7 +121,9 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 
 | # | Título | Archivo | Estado |
 |---|--------|---------|--------|
-| 1 | Autenticación y aislamiento por usuario | prd-DISC-001-01.md | identified |
+| 1a | Identidad y sesión | prd-DISC-001-01a.md | validated |
+| 1b | Límite de intentos fallidos | prd-DISC-001-01b.md | identified |
+| 1c | Aislamiento entre cuentas verificado | prd-DISC-001-01c.md | identified |
 | 2 | Nota descriptiva del movimiento | prd-DISC-001-02.md | identified |
 | 3 | Categorías propias del usuario | prd-DISC-001-03.md | identified |
 | 4 | Multi-moneda | prd-DISC-001-04.md | identified |
@@ -130,11 +138,14 @@ D-2 vitest typecheck├─→ (infraestructura, sin PRD, primero por decisión d
 D-3 fixture 2027   ─┘
                      │
                      ▼
-              [1] Autenticación ──────┬──→ [3] Categorías propias
-                                      │
-                     [2] Nota ────────┤    (independiente: puede entrar en cualquier hueco)
-                                      │
-                                      └──→ [4] Multi-moneda ──→ [5] Dashboard
+   [1a] Identidad ─→ [1b] Límite ─→ [1c] Aislamiento
+     y sesión         de intentos      verificado
+                                          │
+                                          ├──→ [3] Categorías propias
+                                          │
+                     [2] Nota ────────────┤    (independiente: entra en cualquier hueco)
+                                          │
+                                          └──→ [4] Multi-moneda ──→ [5] Dashboard
                                                                       │
                                                                       ▼
                                                             [6] Maquetación y AC-55
@@ -142,10 +153,10 @@ D-3 fixture 2027   ─┘
 
 **Por qué cada arista:**
 
-- **[1] antes que [3]:** AC-12 exige que una categoría propia de un usuario **no aparezca para
+- **[1a..1c] antes que [3]:** AC-12 exige que una categoría propia de un usuario **no aparezca para
   ningún otro**. Sin autenticación hay un solo usuario y ese criterio no es observable — se
   implementaría a ciegas y se verificaría con un test que no puede fallar.
-- **[1] antes que [4] y [5]:** no es una dependencia lógica, es de superficie. Multi-moneda toca el
+- **[1a..1c] antes que [4] y [5]:** no es una dependencia lógica, es de superficie. Multi-moneda toca el
   formulario, el listado, los filtros y el resumen; el dashboard agrega una pantalla entera. Todo lo
   que exista cuando llegue la autenticación hay que revisarlo para el aislamiento. Adelantarlas
   agranda ese barrido sin comprar nada.
@@ -163,8 +174,18 @@ D-3 fixture 2027   ─┘
 vez que [1] esté en `main`, pero se pisan en el formulario de registro, así que en la práctica
 conviene serializarlas salvo que haya dos personas.
 
-**Advertencia de tamaño:** [1] Autenticación tiene 5 RF, 3 RNF y 12 AC, y toca esquema, API y
-frontend. Está por encima del umbral de 5 a 7 criterios que ya obligó a partir FEAT-001 en tres.
-Es muy probable que su PRD se divida en sub-tickets al llegar a DEFINE —el corte natural es
-*alta + login + sesión* primero, y *aislamiento retroactivo de lo ya escrito* después—. Se anota
-acá para que no sorprenda.
+**La autenticación ya está partida en tres.** Tenía 5 RF, 3 RNF y 12 AC sobre esquema, API y
+frontend, por encima del umbral que obligó a partir FEAT-001. Los tres cortes son secuenciales y
+**los tres tienen que estar en `main` antes de exponer la aplicación a usuarios reales**:
+
+- **[1a] Identidad y sesión** — alta, login, logout, sesión obligatoria, hash y expiración a 24 h.
+  Es el que reemplaza `IUsuarioActual` y hace observable todo lo demás.
+- **[1b] Límite de intentos fallidos** — el conteo de 5 fallos y la ventana de 15 minutos de
+  RNF-05. Sale aparte porque es la parte con más estado propio del ticket (dónde se guarda el
+  contador, cómo se limpia) y porque `1a` sin él ya es entregable e independientemente
+  verificable. La contra, anotada en el PRD de `1a`: entre los dos tickets no hay ninguna
+  protección de fuerza bruta.
+- **[1c] Aislamiento verificado** — AC-06..AC-08 de PRD-001 con dos cuentas reales. Es más chico
+  de lo que parece: al reemplazar `IUsuarioActual` en `1a`, el filtro global de EF ya acota las
+  lecturas. Lo que queda es verificarlo con dos cuentas, cerrar las escrituras —el filtro no
+  aplica a INSERT— y el acceso por id directo.

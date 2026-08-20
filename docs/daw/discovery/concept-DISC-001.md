@@ -122,7 +122,7 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 | # | Título | Archivo | Estado |
 |---|--------|---------|--------|
 | 1a | Identidad y sesión | prd-DISC-001-01a.md | validated |
-| 1b | Límite de intentos fallidos | prd-DISC-001-01b.md | identified |
+| 1b | Límite de intentos fallidos | prd-DISC-001-01b.md | validated |
 | 1c | Aislamiento entre cuentas verificado | prd-DISC-001-01c.md | identified |
 | 2 | Nota descriptiva del movimiento | prd-DISC-001-02.md | identified |
 | 3 | Categorías propias del usuario | prd-DISC-001-03.md | identified |

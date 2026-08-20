@@ -31,6 +31,12 @@ insert_final_newline = true
 charset = utf-8
 
 # --- Supresiones en producción -------------------------------------------------------------------
+# Acotadas a GestionGastos.Api/ y no declaradas bajo [*.cs]: las dos reglas se apagan por un motivo
+# que solo vale para el código de producción, y dejarlas en la sección global las aplicaría también
+# al proyecto de tests, que es un alcance más ancho del que el fix-plan aprobó (W-1 de la
+# verificación ronda 1). Hoy no habría diferencia observable, pero el archivo tiene que decir lo que
+# hace.
+[GestionGastos.Api/**.cs]
 
 # CA1725 (Naming) — pide renombrar a inglés parámetros que este proyecto nombra en español
 # (`constructor`, `lector`, `escritor`) para coincidir literalmente con las clases base de EF Core y

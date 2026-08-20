@@ -114,6 +114,10 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
   lógica de adopción que corre una sola vez en la vida del producto.
 - **2026-08-20: la autenticación se parte en tres desde acá, no en DEFINE.** Decisión del usuario.
   El límite de intentos fallidos sale a `1b` en vez de esperar a que el PLAN descubra que no entra.
+- **2026-08-20: multi-moneda se parte en dos, y el corte no es por capa sino por seguridad del
+  dato.** `4a` (catálogo + totales por moneda) no cambia nada visible; `4b` (selector, columna,
+  filtro) hace alcanzable la segunda moneda. El orden inverso dejaría un ticket entero mostrando
+  totales que mezclan monedas.
 - **2026-08-20: el dashboard va después de multi-moneda, no antes.** Los dos reescriben la
   agregación de totales; hacerlo al revés es escribirla dos veces.
 
@@ -126,7 +130,8 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 | 1c | Aislamiento entre cuentas verificado | prd-DISC-001-01c.md | validated |
 | 2 | Nota descriptiva del movimiento | prd-DISC-001-02.md | validated |
 | 3 | Categorías propias del usuario | prd-DISC-001-03.md | validated |
-| 4 | Multi-moneda | prd-DISC-001-04.md | identified |
+| 4a | Catálogo de monedas y totales por moneda | prd-DISC-001-04a.md | validated |
+| 4b | Registrar y filtrar en varias monedas | prd-DISC-001-04b.md | validated |
 | 5 | Dashboard con gráficos | prd-DISC-001-05.md | identified |
 | 6 | Maquetación y accesibilidad | prd-DISC-001-06.md | identified |
 
@@ -145,7 +150,9 @@ D-3 fixture 2027   ─┘
                                           │
                      [2] Nota ────────────┤    (independiente: entra en cualquier hueco)
                                           │
-                                          └──→ [4] Multi-moneda ──→ [5] Dashboard
+                                          └──→ [4a] Catálogo y ──→ [4b] Registrar y ──→ [5] Dashboard
+                                               totales por      filtrar en
+                                               moneda           varias monedas
                                                                       │
                                                                       ▼
                                                             [6] Maquetación y AC-55
@@ -160,7 +167,7 @@ D-3 fixture 2027   ─┘
   formulario, el listado, los filtros y el resumen; el dashboard agrega una pantalla entera. Todo lo
   que exista cuando llegue la autenticación hay que revisarlo para el aislamiento. Adelantarlas
   agranda ese barrido sin comprar nada.
-- **[4] antes que [5]:** RF-29 prohíbe sumar montos de monedas distintas en cualquier total. El
+- **[4a] antes que [4b], y [4b] antes que [5]:** RF-29 prohíbe sumar montos de monedas distintas en cualquier total. El
   dashboard es todo totales (RF-19, RF-20). Construirlo primero es escribir la agregación por
   categoría en una sola moneda y reescribirla entera después.
 - **[6] al final:** una pasada de maquetación sobre pantallas que todavía no existen se rehace.

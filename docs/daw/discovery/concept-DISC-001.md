@@ -125,7 +125,7 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 | 1b | Límite de intentos fallidos | prd-DISC-001-01b.md | validated |
 | 1c | Aislamiento entre cuentas verificado | prd-DISC-001-01c.md | validated |
 | 2 | Nota descriptiva del movimiento | prd-DISC-001-02.md | validated |
-| 3 | Categorías propias del usuario | prd-DISC-001-03.md | identified |
+| 3 | Categorías propias del usuario | prd-DISC-001-03.md | validated |
 | 4 | Multi-moneda | prd-DISC-001-04.md | identified |
 | 5 | Dashboard con gráficos | prd-DISC-001-05.md | identified |
 | 6 | Maquetación y accesibilidad | prd-DISC-001-06.md | identified |

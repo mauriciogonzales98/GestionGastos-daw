@@ -59,6 +59,13 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
   regresión, es el arnés. Arreglarlo obliga a revisar los otros dos tests de rendimiento que
   comparten `SembrarMovimientosAsync`.
 
+- **D-4 · `W-PRD-02` del validador de PRDs da falsos positivos.** `.daw/scripts/validate_prd.py`
+  cuenta los AC de cada FR con una búsqueda de subcadena —`if i in t`—, y `"FR-01"` es subcadena de
+  `"NFR-01"`. Cualquier PRD cuyo NFR-01 esté referenciado por varios criterios dispara el warning
+  sobre su FR-01. Detectado el 2026-08-20 al validar `prd-DISC-001-01c.md`: reportó 7 AC sobre
+  FR-01, que tiene 4. El arreglo es un límite de palabra en la comparación. Es un **QUICK-FIX**: una
+  línea, un archivo, sin dependencias nuevas.
+
 ### Producto (lo que queda de PRD-001)
 
 - **Autenticación y aislamiento por usuario** — RF-01..RF-05, RNF-03, RNF-04, RNF-05.
@@ -138,9 +145,10 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 ## Mapa de dependencias
 
 ```
-D-1 linter backend ─┐
-D-2 vitest typecheck├─→ (infraestructura, sin PRD, primero por decisión del usuario)
-D-3 fixture 2027   ─┘
+D-1 linter backend  ─┐
+D-2 vitest typecheck ├─→ (infraestructura, sin PRD, primero por decisión del usuario)
+D-3 fixture 2027     │
+D-4 W-PRD-02 falso  ─┘
                      │
                      ▼
    [1a] Identidad ─→ [1b] Límite ─→ [1c] Aislamiento

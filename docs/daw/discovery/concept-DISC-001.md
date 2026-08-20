@@ -4,7 +4,7 @@
 |--------|-------|
 | Ticket | DISC-001 |
 | Date | 2026-08-20 |
-| Status | Exploring |
+| Status | Closed |
 
 ## Visión
 
@@ -132,8 +132,8 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 | 3 | Categorías propias del usuario | prd-DISC-001-03.md | validated |
 | 4a | Catálogo de monedas y totales por moneda | prd-DISC-001-04a.md | validated |
 | 4b | Registrar y filtrar en varias monedas | prd-DISC-001-04b.md | validated |
-| 5 | Dashboard con gráficos | prd-DISC-001-05.md | identified |
-| 6 | Maquetación y accesibilidad | prd-DISC-001-06.md | identified |
+| 5 | Dashboard con gráficos | prd-DISC-001-05.md | validated |
+| 6 | Maquetación y accesibilidad | prd-DISC-001-06.md | validated |
 
 ## Mapa de dependencias
 

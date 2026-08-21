@@ -126,3 +126,54 @@ Ninguna.
 ## Veredicto
 
 **PASSED.** 0 Critical, 0 High, 0 Medium, 0 Low. Gate `sast` cumplido.
+
+---
+
+## Ronda 2 — tras el bucle correctivo
+
+| Field | Value |
+|-------|-------|
+| Fecha | 2026-08-21 |
+| Resultado | **PASSED** — 0 vulnerabilidades, 0 supresiones |
+| Motivo de la ronda | La verificación ronda 1 salió BLOCKED con 4 FAIL; el bucle correctivo agregó 10 tests, un archivo de configuración de cobertura y **un cambio en los disparadores del CI** |
+
+### Superficie nueva
+
+10 tests más, `backend/cobertura.runsettings`, y el cambio que sí merece análisis: el workflow pasa
+a dispararse también con `push`.
+
+### El cambio de disparador del CI, analizado
+
+Es lo único de esta ronda con consecuencias de seguridad, así que va con detalle.
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Un fork puede disparar el workflow ahora? | **No.** `push` sólo se dispara con commits empujados a ramas **de este repositorio**; un fork corre en su propio repositorio, con sus propios secretos (ninguno) y sin acceso a los de éste. La superficie de fork no cambia — la gobierna `pull_request`, que sigue igual |
+| ¿Pide permisos nuevos? | **No.** `permissions: contents: read` sigue intacto, y ningún paso pide más |
+| ¿Expone secretos a más gente? | **No.** El único valor sensible es la cadena de conexión de la base efímera del runner, sin contraseña, que ya viajaba en el archivo desde FEAT-002 y no es un secreto: es una base que vive lo que dura el job |
+| ¿Amplía quién puede ejecutar código en el runner? | **No.** Quien puede pushear a este repositorio ya podía abrir un PR y ejecutar exactamente el mismo workflow. Cambia *cuándo* corre, no *quién* lo hace correr |
+| ¿Duplica corridas y con eso el gasto? | Mitigado: el grupo de concurrencia pasó de `github.ref` a `github.head_ref \|\| github.ref_name`, así que el `push` y el `pull_request` del mismo commit caen en el mismo grupo y `cancel-in-progress` deduplica |
+
+`backend/cobertura.runsettings` es configuración de instrumentación: dos opciones de coverlet, sin
+rutas de red, sin credenciales, sin código ejecutable.
+
+### Resultado por regla
+
+Las mismas que la ronda 1, revalidadas sobre la superficie nueva:
+
+```
+  ✅ F-SAST-01 secretos · ✅ F-SAST-02/03/05 inyección · ✅ F-SAST-04/06/08/17
+  ✅ F-SAST-07/09/10/11/12/14/15 · ✅ F-SAST-13/16 dependencias (siguen en 0)
+```
+
+**Y sigue siendo cierto lo que ordenaba el análisis de la ronda 1:** ningún archivo de producción
+cambió en toda la rama. Reverificado con `git diff --name-only main...HEAD` filtrado por
+`backend/GestionGastos.Api/` y `frontend/src/` — vacío.
+
+### Supresiones
+
+Ninguna.
+
+### Veredicto
+
+**PASSED.** 0 Critical, 0 High, 0 Medium, 0 Low. Gate `sast` recuperado.

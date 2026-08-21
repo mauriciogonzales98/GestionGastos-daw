@@ -177,3 +177,35 @@ Ninguna.
 ### Veredicto
 
 **PASSED.** 0 Critical, 0 High, 0 Medium, 0 Low. Gate `sast` recuperado.
+
+---
+
+## Ronda 3 — cierre de W-1 y W-2
+
+| Field | Value |
+|-------|-------|
+| Fecha | 2026-08-22 |
+| Resultado | **PASSED** — 0 vulnerabilidades, 0 supresiones |
+| Superficie | `backend/verificar-contrato.sh`: la salida de `dotnet test` se guarda y se vuelca al fallar |
+
+### Lo único que cambió, y su análisis
+
+El script pasa de descartar la salida de `dotnet test` a guardarla en un archivo temporal y volcarla
+cuando un paso no da lo esperado.
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿El volcado puede exponer datos sensibles? | **No.** La salida son nombres de test, nombres de campo del contrato y nombres de endpoint — todo público y ya versionado. Los cuerpos que los tests comparan traen datos **sembrados por el fixture**, no de usuarios reales, y el comparador reporta *formas*, nunca valores |
+| ¿Puede exponer la cadena de conexión? | **No.** El comparador no la imprime, y el fixture que sí la usa falla con su propio mensaje sin volcarla — comportamiento cubierto por `Contrato_SinBaseDeDatos_FallaConElMensajeDelFixtureYNoConUnoDeContrato` |
+| ¿El archivo temporal queda en disco? | **No.** El `trap … EXIT` pasó a ser `restaurar; rm -f "$salida"`, así que se borra en toda salida, incluida la interrumpida |
+| ¿`mktemp` es seguro acá? | Sí: crea el archivo con permisos 600 y nombre impredecible, sin condición de carrera |
+
+### Verificado en CI real
+
+La corrida `32537559820`, sobre una rama descartable con un desalineamiento deliberado, falló como
+debía y **el log del runner mostró el campo, el endpoint y la dirección**. No se filtró nada más que
+eso. La rama se borró, local y remotamente.
+
+### Veredicto
+
+**PASSED.** Gate `sast` recuperado.

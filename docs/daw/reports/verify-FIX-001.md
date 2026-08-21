@@ -1,4 +1,6 @@
-# Verificación FIX-001 — Ronda 1: BLOCKED
+# Verificación FIX-001
+
+## Ronda 1: BLOCKED
 
 | Field | Value |
 |-------|-------|
@@ -98,3 +100,113 @@ Lo que hay que construir en la ronda 2:
 2. Acotar CA1725 y CA1050 al proyecto de producción, como decía el plan (W-1).
 
 Los WARNINGs W-2 a W-6 quedan registrados y no bloquean.
+
+---
+
+## Ronda 2: PASSED
+
+| Field | Value |
+|-------|-------|
+| Ticket | FIX-001 |
+| Tier | FIX |
+| Ronda | 2 (tras el bucle correctivo de vuelta a CODE) |
+| Fecha | 2026-08-21 |
+| Resultado | **PASSED** — 0 FAIL, 5 WARN, 22 PASS |
+| Verificador | `daw-module-verifier`, sobre código que no escribió |
+
+```
+FAILs: 0 | WARNs: 5 | PASSes: 22  →  PASSED
+```
+
+La ronda 1 no falló porque el linter no anduviera: falló porque **nada en el repositorio comprobaba
+que anduviera**. Lo que cierra esta ronda es exactamente eso — la barrera ahora tiene quien la
+vigile, y esa vigilancia corre en cada PR.
+
+### Evidencia ejecutada en esta ronda
+
+| Comando | Resultado |
+|---|---|
+| `dotnet build backend/GestionGastos.sln -warnaserror --no-incremental` | 0 Warning(s), 0 Error(s) — 10,4 s |
+| `dotnet format backend/GestionGastos.sln --verify-no-changes` | exit 0 — 11,2 s |
+| `./backend/verificar-linter.sh` | exit 0, los 3 chequeos ok, árbol de trabajo limpio después |
+| `dotnet test backend/GestionGastos.sln` | 142/142 |
+| `pnpm --dir frontend test` | 105/105 → **247/247** |
+| `pnpm --dir frontend exec tsc --noEmit` · `pnpm --dir frontend lint` | exit 0 · exit 0 |
+
+Ningún archivo de `backend/GestionGastos.Api/**.cs` fue tocado en toda la rama: los 15 hallazgos de
+producción se resolvieron todos por configuración, como el fix-plan había previsto.
+
+### FAILs de la ronda 1 — estado
+
+- **FAIL-1 (F-VER-06) — CERRADO.** `backend/verificar-linter.sh` existe, es ejecutable, y está
+  enchufado como último paso del job `backend` de `.github/workflows/ci.yml` (commit `a99724f`).
+  Verifica las **dos direcciones** que el fix-plan prometía y que la ronda 1 solo tenía como
+  narración en prosa de una comprobación manual borrada: una violación deliberada de CA1822 en
+  `GestionGastos.Api/Common/` **rompe** el build, y la misma violación dentro de `Migrations/`
+  **no** lo rompe —contra-prueba de la mitigación R-05 del threat model—. Se probó además que el
+  script falla de verdad: con `EnforceCodeStyleInBuild` en `false` sale 1. Con esto quedan
+  verificados AC-03, AC-04 y AC-10, que la ronda 1 daba por comprometidos.
+- **FAIL-2 (F-VER-02) — reclasificado como errata del método, no como FAIL.** El orquestador
+  prohíbe modificar la spec en CODE, VERIFY y RELEASE, así que un fix-plan **no tiene forma de
+  cerrar sus propios checkboxes** después de PLAN. Se evaluó la **sustancia** de los 12 ítems
+  contra el repositorio en vez del estado del checkbox: 10 completos, 2 parciales (W-2 y W-3, sin
+  agravarse), 0 sin sustancia. La tensión del método queda anotada acá para que la vea quien
+  revise la regla, no resuelta por la vía de los hechos.
+
+### Trazabilidad AC → implementación → verificación (F-VER-01)
+
+| AC | Implementación | Verificación |
+|---|---|---|
+| AC-01 | `Directory.Build.props` + `.editorconfig` | `dotnet format --verify-no-changes` exit 0, árbol limpio |
+| AC-02 | ídem | build 0 hallazgos, exit 0 |
+| AC-03 | `backend/verificar-linter.sh` paso 2/3 | ✅ **resuelto en esta ronda** |
+| AC-04 | `.editorconfig` `[GestionGastos.Api/Migrations/*.cs]` | ⚠️ paso 3/3 del script, aún por inferencia (W-2) |
+| AC-05 | `[GestionGastos.Api.Tests/**.cs]` CA1707 = none | build sin CA1707 |
+| AC-06 | `[GestionGastos.Api/**.cs]` CA1725/CA1050 = none | ✅ alcance corregido (W-1) |
+| AC-07 | 8 correcciones mecánicas en tests | 247/247, sin cambios de comportamiento esperado |
+| AC-08 | comentario adyacente a cada supresión | leído en `.editorconfig` |
+| AC-09 | `AGENTS.md`, tabla Stack | fila `Lint (backend)` presente, coletilla eliminada |
+| AC-10 | paso «Barrera del linter» en `ci.yml` | ✅ **resuelto en esta ronda** |
+| AC-11 | paso `Formato` en `ci.yml` | ⚠️ 11,2 s medidos en aislado, no como delta del pipeline (W-3) |
+| AC-12 | desvío registrado en `ca8fa1d` y en `.editorconfig` | 8 corregidas, 17 suprimidas con motivo, ninguna Security/Reliability |
+
+### Pasos del fix-plan (F-VER-02, por sustancia)
+
+Los 5 implementados con evidencia en disco: paso 1 `Directory.Build.props`; paso 2 `.editorconfig`
+con 5 supresiones por id exacto —ninguna por categoría ni comodín, ninguna de Security ni
+Reliability— y la exclusión acotada a `GestionGastos.Api/Migrations/`; paso 3 las correcciones y
+supresiones con motivo; paso 4 los tres pasos de CI; paso 5 `AGENTS.md`.
+
+### Calidad
+
+- **F-VER-05** ✅ — build y formato limpios, ejecutados en esta ronda.
+- **F-VER-03** ⬜ no aplica de forma significativa: el ticket no agrega lógica de negocio. Es
+  configuración de build más 8 correcciones mecánicas de tipo declarado en tests existentes.
+- **F-VER-04** ⬜ no aplica: no hay endpoint ni función que reciba entrada de usuario.
+- **W-VER-01** ✅ sin código muerto ni imports sin usar en el diff de la ronda 2.
+- **W-VER-03** ✅ `verificar-linter.sh` no depende de orden ni de estado global, y limpia sus
+  archivos temporales con `trap … EXIT` en las dos ramas de salida.
+
+### WARNINGs vigentes (5) — ninguno bloquea
+
+- **W-1 — CERRADO.** CA1725 y CA1050 pasaron de `[*.cs]` a `[GestionGastos.Api/**.cs]`.
+- **W-2 · AC-04 por inferencia.** El paso 3 del script simula un archivo dentro de `Migrations/`;
+  no se generó una migración real con `dotnet ef migrations add`. Vigente, sin agravarse.
+- **W-3 · AC-11 medido en aislado.** 11,2 s del comando contra un presupuesto de 60 s. Falta la
+  diferencia de duración del pipeline completo con y sin el paso. Margen amplio, riesgo bajo.
+- **W-4 · AC-10 sin corrida real de GitHub Actions.** Parcialmente mitigado: antes no existía el
+  paso que correr, ahora existe y se probó localmente. Falta observarlo en rojo en un PR real.
+- **W-5 · Desvío del paso 3 sin trazar contra el plan en disco.** CA1861 se suprimió en vez de
+  corregirse con `static readonly`. Documentado en `ca8fa1d` y en `.editorconfig`, válido bajo
+  AC-12; misma imposibilidad de tocar la spec que FAIL-2.
+- **W-6 · La cuenta del plan decía 26 hallazgos activos y eran 25.** El vigésimo sexto era el
+  CA1711 que el propio paso 2 suprime. Sin impacto.
+
+### Seguridad
+
+SAST ronda 2 PASSED, 0 vulnerabilidades y 0 supresiones nuevas (`docs/daw/security/sast-FIX-001.md`,
+commit `257d943`). R-02 y R-05 del threat model revalidados después del cambio de alcance de W-1.
+
+### Acción
+
+**Gate `verify` cumplido.** Listo para pasar a RELEASE.

@@ -196,3 +196,72 @@ hizo la auditoría equivalente leyendo el código y no encontró discrepancias.
 
 **Gate `verify` cumplido.** Listo para RELEASE, con W-1 como condición dura del cierre: el PR tiene
 que correr y su paso «Barrera del contrato» tiene que pasar antes de que el ticket se cierre.
+
+---
+
+## Ronda 3: PASSED — cierre de W-1 y W-2
+
+| Field | Value |
+|-------|-------|
+| Ronda | 3 (acotada, a pedido del usuario) |
+| Fecha | 2026-08-22 |
+| Resultado | **PASSED** — 0 FAIL, 3 WARN, 6 PASS |
+
+El gate ya estaba cumplido desde la ronda 2. El usuario pidió cerrar dos de los WARN antes de
+RELEASE en vez de arrastrarlos, así que hubo un segundo bucle correctivo y esta ronda acotada.
+
+### W-2 — CERRADO, reproducido de forma independiente
+
+El verificador rompió el contrato él mismo, corrió el script y confirmó que el volcado contiene
+campo, endpoint y dirección. Verificó además que `-v quiet` ya no aparece en ningún lado del script,
+que `git status` queda vacío y que el `trap` no deja temporales, incluida la salida temprana por
+`exit 1` del paso 1.
+
+**Vale registrar que el primer intento del arreglo no servía.** Volcaba la salida, pero con
+`-v quiet`, que nombra el test caído y se traga la aserción — o sea, seguía sin decir qué campo. Se
+descubrió yendo a comprobarlo con una mutación real en vez de dar por bueno que "ahora muestra la
+salida". Es la misma lección del ticket aplicada al ticket: **un arreglo que no se comprueba no está
+arreglado.**
+
+### W-1 — SIGUE ABIERTO, con evidencia mucho más fuerte
+
+Se empujó un desalineamiento coherente a la rama descartable `prueba/desalineamiento-deliberado`. La
+corrida `32537559820` falló y el log del runner mostró el campo, el endpoint, la dirección y el test
+que lo detectó. La rama se borró, local y remotamente (verificado con `git ls-remote`).
+
+El verificador confirmó que `ci.yml` no tiene ningún `if: github.event_name == …`: el job y sus pasos
+son idénticos entre `push` y `pull_request`. **Y aun así no dio W-1 por cerrado**, con un criterio
+que corresponde respetar: AC-08 dice literalmente *"IF un **pull request** introduce un
+desalineamiento"*, y equivalencia de configuración no es lo mismo que el evento que el criterio
+nombra.
+
+**Condición de cierre, la misma que la ronda 2 ya había fijado:** W-1 se cierra cuando el PR real de
+RELEASE corra, con evento `pull_request`, y su paso pase. Si esa corrida no ocurre, o falla por algo
+ajeno al contrato, el ticket **no debe cerrarse dando W-1 por bueno** con la evidencia de la rama
+descartable.
+
+Se registra también que el orquestador ofreció al usuario "cerrar los dos WARN" y sólo uno era
+cerrable antes del PR. La corrección quedó dicha.
+
+### Un matiz de mecánica que conviene tener escrito
+
+La corrida falló en el paso **`Tests`**, no en `Barrera del contrato` —que quedó salteado porque el
+anterior ya había roto—. Es correcto y aclara la división de trabajo: los tests de contrato viven en
+la suite normal, así que un desalineamiento rompe ahí; el paso `Barrera del contrato` es el
+meta-chequeo de que la barrera **misma** sigue funcionando.
+
+### Sin regresiones
+
+Build 0/0, formato en 0, 176/176 backend, 105/105 frontend, las dos barreras en pie, `git status`
+limpio, 0 temporales residuales. `git diff` sobre la rama completa confirma **0 archivos de
+producción** tocados.
+
+### WARNINGs vigentes (3)
+
+- **W-1** · AC-08 sin corrida de `pull_request`. **Condición dura del cierre de RELEASE.**
+- **W-3** · Dos bullets del Block 4 sin test automatizado. Sin cambios, a propósito.
+- **W-4** · IDs de semilla hardcodeados. Sin cambios, a propósito.
+
+### Acción
+
+**Gate `verify` cumplido.** Listo para RELEASE, con W-1 como condición dura del cierre.

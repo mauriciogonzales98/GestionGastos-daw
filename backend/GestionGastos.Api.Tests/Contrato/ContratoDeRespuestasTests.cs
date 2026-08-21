@@ -160,6 +160,99 @@ public sealed class ContratoDeRespuestasTests(BaseDeDatosFixture baseDeDatos)
         Assert.False(string.IsNullOrWhiteSpace(diferencia.Detalle));
     }
 
+    [Fact]
+    public void Comparador_ConUnTipoQueElContratoNoDeclara_Lanza()
+    {
+        var contrato = LectorDeTiposDelFrontend.LeerElContratoCompleto();
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => ComparadorDeFormas.Comparar(
+                contrato, "TipoQueNoExiste", JsonDeRespuesta.Raiz("{}"), "/api/prueba"));
+
+        Assert.Contains("TipoQueNoExiste", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Comparador_CuandoSeEsperaObjetoYLlegaOtraCosa_LoReporta()
+    {
+        var diferencia = Assert.Single(ComparadorDeFormas.Comparar(
+            LectorDeTiposDelFrontend.LeerElContratoCompleto(),
+            "CategoriaConTotal",
+            JsonDeRespuesta.Raiz("42"),
+            "/api/resumen"));
+
+        Assert.Contains("objeto", diferencia.Detalle, StringComparison.Ordinal);
+        Assert.Contains("Number", diferencia.Detalle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Comparador_NullEnUnCampoQueNoLoAdmite_LoReporta()
+    {
+        // El contrato distingue «string» de «string | null» a propósito: `nota` admite null y
+        // `moneda` no. Un null donde no se declaró es un campo que la vista no espera vacío.
+        var diferencia = Assert.Single(ComparadorDeFormas.Comparar(
+            LectorDeTiposDelFrontend.LeerElContratoCompleto(),
+            "CategoriaDeMovimiento",
+            JsonDeRespuesta.Raiz("""{"id":1,"nombre":null}"""),
+            "/api/movimientos"));
+
+        Assert.Contains("nombre", diferencia.Ruta, StringComparison.Ordinal);
+        Assert.Contains("null", diferencia.Detalle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Comparador_CuandoSeEsperaArregloYLlegaOtraCosa_LoReporta()
+    {
+        var diferencias = ComparadorDeFormas.Comparar(
+            LectorDeTiposDelFrontend.LeerElContratoCompleto(),
+            "ListadoMovimientosResponse",
+            JsonDeRespuesta.Raiz("""{"items":"no soy un arreglo","recortado":false,"total":0}"""),
+            "/api/movimientos");
+
+        var diferencia = Assert.Single(diferencias);
+        Assert.Contains("items", diferencia.Ruta, StringComparison.Ordinal);
+        Assert.Contains("String", diferencia.Detalle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Comparador_CuandoSeEsperaBooleanYLlegaOtraCosa_LoReporta()
+    {
+        var diferencia = Assert.Single(ComparadorDeFormas.Comparar(
+            LectorDeTiposDelFrontend.LeerElContratoCompleto(),
+            "ListadoMovimientosResponse",
+            JsonDeRespuesta.Raiz("""{"items":[],"recortado":"si","total":0}"""),
+            "/api/movimientos"));
+
+        Assert.Contains("recortado", diferencia.Ruta, StringComparison.Ordinal);
+        Assert.Contains("boolean", diferencia.Detalle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Comparador_UnionDeLiteralesConUnTipoJsonQueNoEsCadena_LoReportaUnaSolaVez()
+    {
+        // Si el tipo JSON ya no coincide, no tiene sentido además quejarse de que el valor no está
+        // en la unión: sería el mismo problema contado dos veces.
+        var diferencia = Assert.Single(ComparadorDeFormas.Comparar(
+            LectorDeTiposDelFrontend.LeerElContratoCompleto(),
+            "CategoriaDto",
+            JsonDeRespuesta.Raiz("""{"id":1,"nombre":"Comida","tipo":7}"""),
+            "/api/categorias"));
+
+        Assert.Contains("tipo", diferencia.Ruta, StringComparison.Ordinal);
+        Assert.Contains("Number", diferencia.Detalle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diferencia_AlImprimirse_LlevaRutaYDetalle()
+    {
+        // El ToString es lo que termina en el mensaje del test que falla, así que es lo que alguien
+        // va a leer a las tres de la tarde de un martes.
+        var texto = new DiferenciaDeContrato("/api/x → Tipo.campo", "el detalle").ToString();
+
+        Assert.Contains("/api/x → Tipo.campo", texto, StringComparison.Ordinal);
+        Assert.Contains("el detalle", texto, StringComparison.Ordinal);
+    }
+
     // ---------------------------------------------------------------- sad paths
 
     [Fact]
@@ -197,6 +290,27 @@ public sealed class ContratoDeRespuestasTests(BaseDeDatosFixture baseDeDatos)
             "/api/movimientos"));
         Assert.Throws<InvalidOperationException>(
             () => ExigirColeccionNoVacia(items, "/api/movimientos", "items"));
+    }
+
+    [Fact]
+    public async Task Contrato_SinBaseDeDatos_FallaConElMensajeDelFixtureYNoConUnoDeContrato()
+    {
+        // Required test del Block 5. La distinción importa: si la base no responde, el contrato
+        // queda SIN verificar, y leer eso como "el contrato no coincide" mandaría a alguien a buscar
+        // un desalineamiento que no existe. Peor todavía sería leerlo como éxito.
+        await using var fabrica = new ApiFactory(ApiFactory.CadenaHaciaUnPuertoCerrado);
+        using var cliente = fabrica.CreateClient();
+        using var respuesta = await cliente.GetAsync("/api/resumen");
+
+        Assert.NotEqual(HttpStatusCode.OK, respuesta.StatusCode);
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => ExigirCuerpoComparable(respuesta.StatusCode, "/api/resumen"));
+
+        // Habla de no haber podido obtener el cuerpo, no de campos ni de formas.
+        Assert.Contains("no se pudo obtener el cuerpo", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("no coincide", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("el frontend declara", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

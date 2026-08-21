@@ -114,6 +114,66 @@ public sealed class LectorDeTiposDelFrontendTests
     }
 
     [Fact]
+    public void Lector_ConUnCampoDeUnTipoQueNoExiste_Lanza()
+    {
+        // Un campo que referencia un tipo inexistente es una forma silenciosa de contrato roto: el
+        // recorrido del comparador no tendría contra qué compararlo y podría darlo por bueno. Es la
+        // misma familia que R-02 del threat model, en una variante que la spec no había previsto.
+        const string fragmento = """
+            export interface Cosa {
+              id: number;
+              hija: NoExiste;
+            }
+            """;
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => LectorDeTiposDelFrontend.Parsear(fragmento, Origen));
+
+        Assert.Contains("Cosa", error.Message, StringComparison.Ordinal);
+        Assert.Contains("hija", error.Message, StringComparison.Ordinal);
+        Assert.Contains("NoExiste", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Lector_ConUnaConstruccionNoReconocidaFueraDeUnaInterfaz_Lanza()
+    {
+        // Fuera de una interfaz el parser tampoco saltea: un `import` o un `export const` que hoy
+        // ignorara en silencio sería, mañana, una declaración de contrato que nadie verifica.
+        const string fragmento = """
+            import { algo } from './otro';
+
+            export interface Cosa {
+              id: number;
+            }
+            """;
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => LectorDeTiposDelFrontend.Parsear(fragmento, Origen));
+
+        Assert.Contains(Linea(1), error.Message, StringComparison.Ordinal);
+        Assert.Contains("import", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Lector_ConUnAliasQueNoEsUnionDeLiterales_Lanza()
+    {
+        // El comparador usa los literales del alias para verificar el VALOR, no sólo el tipo JSON.
+        // Un alias que no sea unión de literales lo dejaría sin nada contra qué comparar.
+        const string fragmento = """
+            export type Identificador = number;
+
+            export interface Cosa {
+              id: number;
+            }
+            """;
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => LectorDeTiposDelFrontend.Parsear(fragmento, Origen));
+
+        Assert.Contains("Identificador", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Lector_SinElArchivo_LanzaNombrandoLaRuta()
     {
         var ruta = Path.Combine(Path.GetTempPath(), "contrato-que-no-existe", "tipos.ts");

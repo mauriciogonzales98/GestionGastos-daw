@@ -1,6 +1,14 @@
 name: CI
 
 on:
+  # Corre en push sobre cualquier rama que no sea main, ademas de en los PR. El motivo esta medido,
+  # no supuesto: hasta FEAT-003 el CI solo se disparaba con PRs contra main, asi que ningun ticket
+  # podia ver ni medir su propio pipeline antes de la fase RELEASE. Eso dejo AC-09 de FEAT-003
+  # inverificable en la fase que lo verifica, y antes habia costado el ticket FIX-002 entero: la
+  # primera corrida real encontro un bit de ejecucion faltante que ninguna comprobacion local podia
+  # encontrar.
+  push:
+    branches-ignore: [main]
   pull_request:
     branches: [main]
 
@@ -12,7 +20,7 @@ permissions:
 
 # Un push nuevo sobre el mismo PR cancela la corrida anterior: lo que importa es el último commit.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

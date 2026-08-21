@@ -84,6 +84,13 @@ a [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **FIX-003** — El validador de PRDs comparaba los identificadores de requisito por subcadena, y
+  `FR-01` es subcadena de `NFR-01`. La consecuencia conocida era un aviso espurio de `W-PRD-02`;
+  la que no estaba documentada es peor: `F-PRD-01` —una regla **FAIL**— daba un falso negativo, y
+  un FR sin ningún criterio de aceptación que lo validara pasaba el gate en cuanto algún AC
+  mencionara `NFR-01`. Ahora la comparación usa límite de palabra. Revalidados los 14 PRDs del
+  repositorio: ninguno cambia de veredicto, y `prd-DISC-001-01c` pierde el aviso que sobraba.
+
 - **FIX-002** — `backend/verificar-linter.sh` estaba commiteado sin bit de ejecución (modo `100644`),
   así que el paso «Barrera del linter» del CI moría con `exit 126` sin llegar a ejecutar una línea:
   la barrera que FIX-001 construyó para vigilar al linter no corría. No se vio antes porque el repo

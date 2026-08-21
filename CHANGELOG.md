@@ -82,6 +82,14 @@ a [Versionado Semántico](https://semver.org/lang/es/).
     eso, cada migración futura entraría con hallazgos que nadie escribió y que romperían el build,
     que es la forma en que un linter termina apagado a los dos meses.
 
+### Fixed
+
+- **FIX-002** — `backend/verificar-linter.sh` estaba commiteado sin bit de ejecución (modo `100644`),
+  así que el paso «Barrera del linter» del CI moría con `exit 126` sin llegar a ejecutar una línea:
+  la barrera que FIX-001 construyó para vigilar al linter no corría. No se vio antes porque el repo
+  se trabaja desde un montaje de Windows, que reporta todo como `rwxrwxrwx` sin importar lo que diga
+  git. El contenido del script no cambió.
+
 ### Changed
 
 - **FEAT-001b** — El total del listado y la señal `recortado` se calculan sobre el universo **ya

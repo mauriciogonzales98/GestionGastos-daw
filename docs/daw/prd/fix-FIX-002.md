@@ -1,0 +1,6 @@
+# Fix FIX-002: Bit de ejecución de verificar-linter.sh
+
+- **Bug**: `backend/verificar-linter.sh` está commiteado con modo `100644`, sin bit de ejecución, así que el paso «Barrera del linter» del CI muere con `exit 126` (`Permission denied`) sin ejecutar una línea. No se vio en local porque el repo está en un montaje de Windows que reporta todo como `rwxrwxrwx` sin importar lo que diga git.
+- **Change**: `backend/verificar-linter.sh` — `git update-index --chmod=+x`, de `100644` a `100755`. El contenido del script no se toca. Se agrega además la fila `Barrera del linter (backend)` a la tabla Stack de `AGENTS.md`, que declaraba el comando en ningún lado (hallazgo de `daw-context-check`).
+- **Regression test**: la corrida del CI sobre el PR de este ticket. Antes del fix el paso «Barrera del linter» falla con `exit 126`; después ejecuta los tres chequeos del script y sale 0. Es el mismo mecanismo que ya detectó el bug — la corrida real del run `32481428139` sobre el PR #6 —, y verificar el modo con `git ls-files -s backend/verificar-linter.sh` da `100755` en vez de `100644`.
+- **Risk**: ninguno. Cambia un bit de permiso de un archivo que hoy no se ejecuta en el CI; no toca código de producción, ni esquema, ni endpoints, ni el contenido del script. Si algo saliera mal, el reverso es el mismo comando con `--chmod=-x`.

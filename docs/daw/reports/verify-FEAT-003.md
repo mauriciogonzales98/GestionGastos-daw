@@ -124,3 +124,75 @@ Y **FAIL-1 no se arregla con código**: AC-09 está escrito de una forma que no 
 la fase que lo verifica. Requiere una decisión del usuario entre corregir el criterio —bucle
 correctivo hasta DEFINE— o aceptar que se cierre en RELEASE con la medición real como condición
 dura del cierre, y no como nota al pie.
+
+---
+
+## Ronda 2: PASSED
+
+| Field | Value |
+|-------|-------|
+| Ronda | 2 (tras el bucle correctivo) |
+| Fecha | 2026-08-21 |
+| Resultado | **PASSED** — 0 FAIL, 4 WARN, 31 PASS |
+| Verificador | `daw-module-verifier`, reejecutando cada medición por su cuenta |
+
+```
+FAILs: 0 | WARNs: 4 | PASSes: 31  →  PASSED
+```
+
+El verificador no aceptó ningún número del bucle correctivo: reejecutó la suite con el runsettings,
+parseó el XML de cobertura a mano, corrió el script de la barrera, consultó la corrida de CI por
+`gh api`, y leyó el parser línea por línea contra cada test nuevo en vez de confiar en los nombres.
+
+### Los cuatro FAIL, cerrados con evidencia reproducida
+
+| FAIL | Cómo se cerró | Confirmación independiente |
+|---|---|---|
+| **FAIL-1** AC-09 inverificable | El CI corre en `push` (decisión del usuario) | Corrida `32535963580`, disparada por `push` sin PR, `success`. El paso «Barrera del contrato» medido por el verificador: `23:13:26 → 23:13:50` = **24 s** contra 90 s de techo |
+| **FAIL-2** test de corrida sin base | `Contrato_SinBaseDeDatos_FallaConElMensajeDelFixtureYNoConUnoDeContrato` | Existe, usa `CadenaHaciaUnPuertoCerrado`, y sus tres asserts son sustanciales |
+| **FAIL-3** ramas del parser sin test | 3 sad paths nuevos | Cada uno dispara exactamente el `throw` que dice disparar, verificado leyendo el código |
+| **FAIL-4** cobertura no medible | `backend/cobertura.runsettings` | Recalculada a mano: `ComparadorDeFormas` **100%**, código nuevo **95,5%**, mínimo `LectorDeTiposDelFrontend` **92,1%** |
+
+Los 35 checkboxes de la spec verificados por sustancia, y confirmado con `git log` que
+`spec-FEAT-003.md` no se tocó después de PLAN.
+
+### Una corrección al cierre del bucle, que corresponde dejar escrita
+
+El commit `ba159e1` afirmó que la corrida de CI **cerraba** W-1 y W-2 de la ronda 1. **No es
+exacto**, y el verificador lo marcó bien:
+
+- **W-1 sigue abierto.** AC-08 dice literalmente *"IF un **pull request** introduce un
+  incumplimiento"*. La corrida fue por `push`. El mecanismo subyacente es idéntico y está probado,
+  pero el criterio como está escrito todavía no tiene su corrida. Se cierra en RELEASE, con el PR.
+- **W-2 sigue abierto, y es un hallazgo nuevo de sustancia.** `verificacionDeContrato()` en
+  `backend/verificar-contrato.sh` redirige `dotnet test` a `/dev/null 2>&1`. Cuando la barrera falle
+  de verdad en el CI, el log va a mostrar *"FALLA: el contrato ya no verifica sin haber tocado
+  nada"* **sin decir qué campo ni qué endpoint**. El mensaje bueno existe y está cubierto por
+  `Comparador_AlReportar_NombraCampoEndpointYDiferencia`, pero nunca llega al lugar donde alguien lo
+  leería a las tres de la tarde de un martes.
+
+  Es exactamente la clase de detalle que este ticket entero existe para no dejar pasar: una barrera
+  que detecta el problema pero no sabe explicarlo. **Queda como deuda declarada**, no como algo
+  cerrado.
+
+### WARNINGs vigentes (4)
+
+- **W-1 · AC-08 sin corrida de `pull_request`.** Se cierra en RELEASE. **Condición explícita del
+  cierre, no nota al pie.**
+- **W-2 · El script silencia la salida de `dotnet test`.** El log de una falla real no dirá qué
+  campo. Deuda declarada; el arreglo es capturar la salida y volcarla cuando el paso falla.
+- **W-3 · Dos bullets del Block 4 sin test automatizado.** El desarme se comprobó a mano en dos
+  formas durante CODE y quedó en el commit `748d6bd`, pero la spec lo redacta como narración; y la
+  corrida interrumpida del `trap` no se ejercita. Sin cambios desde la ronda 1, confirmado por diff.
+- **W-4 · IDs de semilla hardcodeados** (`CategoriaComidaId = 1`, `CategoriaSueldoId = 8`). Mismo
+  patrón que tickets anteriores; se acumula, no es regresión.
+
+Se registra además una observación de proceso: el commit del bucle correctivo no declara evidencia
+TDD explícita. Atenuante verificado: la ronda 2 no agregó **ningún** código de producción — los
+tests nuevos ejercitan ramas que ya existían desde la ronda 1 y estaban sin cubrir. El verificador
+hizo la auditoría equivalente leyendo el código y no encontró discrepancias.
+
+### Acción
+
+**Gate `verify` cumplido.** Listo para RELEASE, con W-1 como condición dura del cierre: el PR tiene
+que correr y su paso «Barrera del contrato» tiene que pasar antes de que el ticket se cierre.

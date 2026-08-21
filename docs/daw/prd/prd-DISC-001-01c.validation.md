@@ -1,0 +1,16 @@
+```
+/daw-validate-prd docs/daw/prd/prd-DISC-001-01c.md — PASSED
+────────────────────────────────────────────────────────────────
+  ✅ F-PRD-08: all mandatory sections present
+  ✅ F-PRD-05: 4 FR, 2 NFR, 10 AC — unique, gapless
+  ✅ F-PRD-01: every FR is validated by at least one AC
+  ✅ F-PRD-03: every NFR carries a quantitative value
+  ✅ F-PRD-06: no ambiguous verbs in requirements
+  ✅ F-PRD-09: not applied (DISCOVERY)
+  ⚠️ W-PRD-02: more than 5 ACs on: FR-01
+  👁  F-PRD-02 (binary ACs) and F-PRD-07 (undeclared cross-references) are
+      MANUAL: judge them and say so explicitly in your report.
+────────────────────────────────────────────────────────────────
+Total: 6 passed, 0 failed, 1 warnings
+Result: PASSED
+```

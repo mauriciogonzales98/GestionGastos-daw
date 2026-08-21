@@ -43,11 +43,30 @@ restaurar() {
     cp "$respaldo" "$dto"
     rm -f "$respaldo"
 }
-trap restaurar EXIT
 
 # --no-build no sirve acá: el punto del script es recompilar con el DTO cambiado.
+#
+# La salida se guarda en vez de descartarse, y se vuelca con `mostrarLaSalida` cuando el paso que la
+# produjo no dio lo esperado. Descartarla dejaba el log del CI diciendo "el contrato ya no verifica"
+# SIN decir que campo ni que endpoint, cuando el comparador ya tiene ese mensaje y esta testeado:
+# una barrera que detecta el problema pero no sabe explicarlo, que es la falla que este ticket
+# combate. Detectado como W-2 en la verificacion ronda 2.
+#
+# La verbosidad es `normal` y no `quiet` a proposito: con `quiet`, dotnet test nombra el test
+# que fallo pero NO el mensaje de la asercion, que es justamente donde estan el campo y el
+# endpoint. Comprobado rompiendo el contrato y leyendo el volcado.
+salida="$(mktemp)"
+trap 'restaurar; rm -f "$salida"' EXIT
+
 verificacionDeContrato() {
-    dotnet test "$solucion" --filter "FullyQualifiedName~Contrato" --nologo -v quiet > /dev/null 2>&1
+    dotnet test "$solucion" --filter "FullyQualifiedName~Contrato" --nologo -v normal > "$salida" 2>&1
+}
+
+mostrarLaSalida() {
+    echo
+    echo "     ----- salida de dotnet test -----"
+    sed 's/^/     /' "$salida"
+    echo "     ---------------------------------"
 }
 
 fallo=0
@@ -58,6 +77,7 @@ if verificacionDeContrato; then
 else
     echo "     FALLA: el contrato ya no verifica sin haber tocado nada."
     echo "            Arreglá eso antes de leer el resto: los pasos 2 y 3 no dirían nada."
+    mostrarLaSalida
     exit 1
 fi
 
@@ -80,6 +100,7 @@ if verificacionDeContrato; then
     echo "     ok"
 else
     echo "     FALLA: no volvió a pasar tras revertir. El árbol puede haber quedado sucio."
+    mostrarLaSalida
     fallo=1
 fi
 

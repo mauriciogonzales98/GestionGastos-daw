@@ -44,6 +44,18 @@ UNWANTED = re.compile(r"\bIF\b.+?\bTHEN\b.+?\bSHALL\b", re.IGNORECASE | re.DOTAL
 REQ_ID = re.compile(r"\b(FR|NFR|AC)-(\d+)\b")
 
 
+def _mentions(req_id, text):
+    """Is `req_id` referenced in `text` as itself, and not inside a longer id?
+
+    Substring matching gets this wrong in one specific and very common way:
+    "FR-01" is a substring of "NFR-01". It cost F-PRD-01 a false negative — an
+    FR with no AC read as covered whenever any AC mentioned NFR-01 — and
+    W-PRD-02 a false positive. `\\b` settles it: in "NFR-01" the F is preceded
+    by N, a word character, so there is no boundary there to match.
+    """
+    return re.search(rf"\b{re.escape(req_id)}\b", text) is not None
+
+
 def _items(text, prefix):
     """Bullet items carrying an ID of the given prefix, as (id, full_text)."""
     out = []
@@ -146,7 +158,7 @@ def main():
 
         # F-PRD-01: every FR referenced by at least one AC.
         ac_text = " ".join(t for _, t in acs)
-        orphans = [i for i, _ in frs if i not in ac_text]
+        orphans = [i for i, _ in frs if not _mentions(i, ac_text)]
         if orphans:
             fail("F-PRD-01", f"FR with no AC validating it: {', '.join(orphans)}")
         else:
@@ -184,7 +196,7 @@ def main():
             ok("F-PRD-09", "every AC matches an EARS pattern")
 
         # W-PRD-02: more than 5 ACs on one FR.
-        heavy = [i for i, _ in frs if len([1 for _, t in acs if i in t]) > 5]
+        heavy = [i for i, _ in frs if len([1 for _, t in acs if _mentions(i, t)]) > 5]
         if heavy:
             warn("W-PRD-02", f"more than 5 ACs on: {', '.join(heavy)}")
 

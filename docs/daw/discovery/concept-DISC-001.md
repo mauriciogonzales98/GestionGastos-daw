@@ -44,13 +44,15 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 
 ### Deuda de infraestructura (sin PRD — decidido primero por el usuario)
 
-- **D-1 · Linter del backend.** `.editorconfig` + `Directory.Build.props` con
-  `EnforceCodeStyleInBuild` y `AnalysisMode=Recommended`; el comando de lint pasa a ser
-  `dotnet format backend/GestionGastos.sln --verify-no-changes`. Medición ya hecha (2026-08-18):
-  258 hallazgos, de los cuales 188 son un CA1707 que hay que **apagar** —renombrar 188 tests para
-  sacarles los guiones bajos los empeora— y 18 un CA1725 que choca con nombrar parámetros en
-  español. Trabajo real: ~12 correcciones mecánicas + 2 reglas silenciadas con su motivo. La cifra
-  de producción está **subestimada**: se midió sobre `a`+`b`, falta contar `Resumen/`.
+- **D-1 · Linter del backend. ✅ HECHO** — FIX-001 (PR #6) y FIX-002 (PR #7), mergeados el
+  2026-08-21. `backend/Directory.Build.props` + `backend/.editorconfig`, con
+  `backend/verificar-linter.sh` corriendo en el CI para que la barrera no se pueda desarmar en
+  silencio.
+  > **La medición que este ítem citaba estaba mal.** Decía 258 hallazgos con 188 CA1707 y 18
+  > CA1725; se había hecho sobre `a`+`b` sin contar `Resumen/`. Rehecha en
+  > `docs/daw/specs/rca-FIX-001.md` (2026-08-20): **158 hallazgos únicos**, 143 en tests y 15 en
+  > producción, con 117 CA1707 y 9 CA1725. Y el dato que cambió la forma del ticket: en producción
+  > no había **ninguna** corrección que hacer a mano, solo tres decisiones de configuración.
 - **D-2 · Vitest sin `typecheck`.** Un contrato del frontend desalineado con el DTO del backend deja
   la suite verde y aparece como `undefined` en pantalla. Demostrado con una mutación en el Block 3
   de FEAT-001c. Hoy solo lo detecta `tsc --noEmit`, que corre aparte.
@@ -59,12 +61,15 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
   regresión, es el arnés. Arreglarlo obliga a revisar los otros dos tests de rendimiento que
   comparten `SembrarMovimientosAsync`.
 
-- **D-4 · `W-PRD-02` del validador de PRDs da falsos positivos.** `.daw/scripts/validate_prd.py`
-  cuenta los AC de cada FR con una búsqueda de subcadena —`if i in t`—, y `"FR-01"` es subcadena de
-  `"NFR-01"`. Cualquier PRD cuyo NFR-01 esté referenciado por varios criterios dispara el warning
-  sobre su FR-01. Detectado el 2026-08-20 al validar `prd-DISC-001-01c.md`: reportó 7 AC sobre
-  FR-01, que tiene 4. El arreglo es un límite de palabra en la comparación. Es un **QUICK-FIX**: una
-  línea, un archivo, sin dependencias nuevas.
+- **D-4 · Comparación por subcadena en el validador de PRDs. ✅ HECHO** — FIX-003 (PR #8).
+  `.daw/scripts/validate_prd.py` comparaba los identificadores con `if i in t`, y `"FR-01"` es
+  subcadena de `"NFR-01"`. Detectado el 2026-08-20 al validar `prd-DISC-001-01c.md`: reportó 7 AC
+  sobre FR-01, que tiene 4. Resuelto con un límite de palabra en los dos puntos de llamada.
+  > **Este ítem describía una sola de las dos víctimas.** Además del falso positivo de `W-PRD-02`,
+  > la misma línea rota le costaba a **`F-PRD-01` —una regla FAIL— un falso negativo**: un FR sin
+  > ningún AC que lo validara pasaba el gate en cuanto algún AC mencionara `NFR-01`. Eso es
+  > exactamente lo que el catálogo dice que nunca puede quedar sin detectar. Revalidados los 14
+  > PRDs del repositorio tras el arreglo: ninguno cambió de veredicto.
 
 ### Producto (lo que queda de PRD-001)
 
@@ -145,10 +150,11 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 ## Mapa de dependencias
 
 ```
-D-1 linter backend  ─┐
+D-1 linter backend  ─┐  ✅ FIX-001 + FIX-002
 D-2 vitest typecheck ├─→ (infraestructura, sin PRD, primero por decisión del usuario)
 D-3 fixture 2027     │
-D-4 W-PRD-02 falso  ─┘
+D-4 subcadena en    ─┘  ✅ FIX-003
+    validate_prd.py
                      │
                      ▼
    [1a] Identidad ─→ [1b] Límite ─→ [1c] Aislamiento

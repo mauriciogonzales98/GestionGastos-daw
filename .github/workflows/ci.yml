@@ -116,6 +116,18 @@ jobs:
         env:
           ConnectionStrings__Default: "Server=127.0.0.1;Port=3306;Database=gestiongastos_test;User ID=root;AllowPublicKeyRetrieval=true;"
 
+      # El contrato HTTP esta escrito dos veces —en los record de C# y en las interfaces de
+      # frontend/src/api/tipos.ts— y hasta FEAT-003 nada comparaba las dos copias: un rename
+      # coherente del backend dejaba todo en verde y llegaba undefined a la pantalla. Este paso
+      # comprueba que la barrera que lo detecta sigue en pie, no solo que los tests pasan.
+      #
+      # Va despues de Tests porque recompila con un DTO modificado, igual que la barrera del
+      # linter: correrlo antes invalidaria el --no-build del paso de Tests.
+      - name: Barrera del contrato
+        run: ./backend/verificar-contrato.sh
+        env:
+          ConnectionStrings__Default: "Server=127.0.0.1;Port=3306;Database=gestiongastos_test;User ID=root;AllowPublicKeyRetrieval=true;"
+
       # La barrera del linter es configuración, y una barrera de configuración se puede desarmar en
       # silencio: alguien pone EnforceCodeStyleInBuild en false y el build sigue verde. Este paso es
       # lo único que se pone en rojo cuando eso pasa. Verifica las dos direcciones — una violación

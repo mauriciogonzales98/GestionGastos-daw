@@ -57,6 +57,39 @@ a [Versionado Semántico](https://semver.org/lang/es/).
   - Si el resumen falla, el listado sigue en pie: son dos peticiones independientes y ofrece
     reintento por su cuenta.
 
+- **FIX-001** — Linter del backend .NET: hasta acá el backend compilaba en verde sin que nada mirara
+  convenciones, mientras el frontend corría ESLint y Prettier en cada PR.
+  - `backend/Directory.Build.props` enciende los analizadores de Roslyn del SDK
+    (`EnforceCodeStyleInBuild`, `AnalysisMode=Recommended`). No se agregó ningún paquete NuGet de
+    análisis: un analizador es código de terceros que el compilador ejecuta en cada build, local y
+    en el runner, con acceso al árbol de fuentes.
+  - `backend/.editorconfig` declara qué reglas se aplican y cuáles se apagan, **cada supresión con
+    su motivo escrito al lado**. Son cinco, todas de Naming, Design o Performance, y todas por un
+    motivo que sobrevive a la lectura: obedecerlas empeoraría el código —renombrar 117 tests, o el
+    fixture de colección de xUnit, o traducir al inglés parámetros que el proyecto nombra en
+    español—.
+  - Comando propio de lint, espejo del `prettier --check` del frontend:
+    `dotnet format backend/GestionGastos.sln --verify-no-changes`. Declarado en la tabla Stack de
+    `AGENTS.md`, que ya no describe el build como "lo más cercano a un linter".
+  - `backend/verificar-linter.sh` — la barrera es configuración, y una barrera de configuración se
+    puede desarmar en silencio: alguien pone `EnforceCodeStyleInBuild` en `false` y el build sigue
+    verde. Este script es lo único que se pone en rojo cuando eso pasa. Comprueba las dos
+    direcciones: una violación deliberada en código escrito a mano rompe el build, y la misma
+    violación dentro de `Migrations/` no lo rompe.
+  - El CI del backend pasa a tener las tres barreras: `Build` con `-warnaserror` (los analizadores
+    corren adentro), `Formato`, y `Barrera del linter` como último paso.
+  - Las migraciones de Entity Framework quedan fuera del análisis, acotado al directorio exacto. Sin
+    eso, cada migración futura entraría con hallazgos que nadie escribió y que romperían el build,
+    que es la forma en que un linter termina apagado a los dos meses.
+
+### Fixed
+
+- **FIX-002** — `backend/verificar-linter.sh` estaba commiteado sin bit de ejecución (modo `100644`),
+  así que el paso «Barrera del linter» del CI moría con `exit 126` sin llegar a ejecutar una línea:
+  la barrera que FIX-001 construyó para vigilar al linter no corría. No se vio antes porque el repo
+  se trabaja desde un montaje de Windows, que reporta todo como `rwxrwxrwx` sin importar lo que diga
+  git. El contenido del script no cambió.
+
 ### Changed
 
 - **FEAT-001b** — El total del listado y la señal `recortado` se calculan sobre el universo **ya
@@ -94,5 +127,15 @@ a [Versionado Semántico](https://semver.org/lang/es/).
 - Que la agregación ocurra **en SQL** es un control de seguridad y no solo de rendimiento: una
   agregación evaluada en memoria devuelve exactamente los mismos números mientras materializa la
   tabla entera en cada carga de pantalla. Lo distingue un test que observa el SQL emitido.
+
+- El `.editorconfig` del backend prohíbe, en su propio encabezado, suprimir reglas **por categoría**
+  o con comodines: solo por id exacto. Y ninguna regla de las categorías **Security** o
+  **Reliability** puede sumarse a esa lista sin un threat model propio. El archivo nace con cinco
+  reglas apagadas por buenos motivos, y eso es exactamente lo que vuelve indistinguible apagar
+  CA1707 de apagar CA2100 (SQL por concatenación) o CA5350 (cripto débil).
+- La exclusión de código generado se acota a `GestionGastos.Api/Migrations/`, con prefijo de proyecto
+  y sin comodines. Un patrón ancho apagaría los analizadores —los de seguridad incluidos— sobre
+  código escrito a mano sin que nada lo indicara: los hallazgos simplemente dejarían de aparecer. El
+  paso 3 de `verificar-linter.sh` es la contra-prueba de que no se ensanchó.
 
 [Unreleased]: https://github.com/mauriciogonzales98/GestionGastos-daw/commits/main

@@ -44,7 +44,7 @@ public sealed class RendimientoResumenTests(BaseDeDatosFixture baseDeDatos, ITes
     /// sembradas y no de un número a mano, que dejaría de valer en cuanto alguien tocara el
     /// sembrado.
     /// </summary>
-    private static readonly IReadOnlyList<int> IndicesSembradosDelMes = MedicionDeRendimiento.FechasSembradas
+    private static readonly List<int> IndicesSembradosDelMes = MedicionDeRendimiento.FechasSembradas
         .Select((fecha, indice) => (Fecha: fecha, Indice: indice))
         .Where(f => f.Fecha >= PrimerDiaDelMes && f.Fecha <= UltimoDiaDelMes)
         .Select(f => f.Indice)

@@ -89,10 +89,18 @@ jobs:
       - name: Restaurar
         run: dotnet restore backend/GestionGastos.sln
 
-      # -warnaserror es lo más cercano a un linter que hoy tiene el backend: no hay analizador de
-      # estilo configurado. Que un warning nuevo rompa el PR es la parte que sí se puede exigir.
+      # Este paso ES el linter de calidad del backend (FIX-001): backend/Directory.Build.props
+      # enciende los analizadores de Roslyn, que corren dentro de la compilación, y -warnaserror
+      # convierte cualquier hallazgo en un PR roto. Qué reglas se aplican: backend/.editorconfig.
       - name: Build
         run: dotnet build backend/GestionGastos.sln --no-restore -warnaserror
+
+      # El formato va aparte del build, igual que el job de frontend separa Lint de Formato: los
+      # analizadores miran calidad y `dotnet format` mira formato, y una sola de las dos familias
+      # deja media barrera. Va entre Build y Tests para no cortar la cadena restore -> build -> test
+      # que --no-restore y --no-build encadenan.
+      - name: Formato
+        run: dotnet format backend/GestionGastos.sln --verify-no-changes --no-restore
 
       # El fixture crea y migra gestiongastos_test por su cuenta; acá solo hace falta que el
       # servidor esté arriba y que la variable exista. Sin ella el fixture lanza a propósito, en vez
@@ -107,3 +115,13 @@ jobs:
           --filter "FullyQualifiedName!~Rendimiento"
         env:
           ConnectionStrings__Default: "Server=127.0.0.1;Port=3306;Database=gestiongastos_test;User ID=root;AllowPublicKeyRetrieval=true;"
+
+      # La barrera del linter es configuración, y una barrera de configuración se puede desarmar en
+      # silencio: alguien pone EnforceCodeStyleInBuild en false y el build sigue verde. Este paso es
+      # lo único que se pone en rojo cuando eso pasa. Verifica las dos direcciones — una violación
+      # deliberada rompe el build en código escrito a mano y no lo rompe dentro de Migrations/.
+      #
+      # Va ÚLTIMO a propósito: compila con un archivo temporal adentro, así que correrlo antes
+      # invalidaría el --no-build del paso de Tests.
+      - name: Barrera del linter
+        run: ./backend/verificar-linter.sh

@@ -401,7 +401,7 @@ public sealed class ResumenTests(BaseDeDatosFixture baseDeDatos)
 
     private static decimal Balance(JsonElement resumen) => resumen.GetProperty("balance").GetDecimal();
 
-    private static IReadOnlyList<JsonElement> Desglose(JsonElement resumen)
+    private static List<JsonElement> Desglose(JsonElement resumen)
     {
         Assert.True(resumen.TryGetProperty("desglose", out var desglose), "La respuesta no trae 'desglose'.");
         Assert.Equal(JsonValueKind.Array, desglose.ValueKind);
@@ -412,7 +412,7 @@ public sealed class ResumenTests(BaseDeDatosFixture baseDeDatos)
     /// El desglose indexado por nombre de categoría. Falla si una categoría aparece dos veces, que
     /// es como se vería una agregación que no agrupó (AC-12).
     /// </summary>
-    private static IReadOnlyDictionary<string, decimal> DesglosePorNombre(JsonElement resumen)
+    private static Dictionary<string, decimal> DesglosePorNombre(JsonElement resumen)
     {
         var filas = Desglose(resumen)
             .Select(c => (Nombre: c.GetProperty("categoriaNombre").GetString()!, Total: c.GetProperty("total").GetDecimal()))
@@ -422,7 +422,7 @@ public sealed class ResumenTests(BaseDeDatosFixture baseDeDatos)
     }
 
     /// <summary>Sentencias observadas que leyeron la tabla de movimientos.</summary>
-    private static IReadOnlyList<string> ConsultasSobreMovimientos(RegistroDeSentencias sentencias) =>
+    private static List<string> ConsultasSobreMovimientos(RegistroDeSentencias sentencias) =>
         sentencias.Sentencias
             .Where(s => s.Contains($"FROM `{TablaDeMovimientos}`", StringComparison.Ordinal))
             .ToList();

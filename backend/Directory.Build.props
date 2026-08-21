@@ -1,0 +1,24 @@
+<Project>
+
+  <!--
+    Linter del backend (FIX-001). Los analizadores de Roslyn vienen en el SDK pero están apagados
+    por defecto en lo que hace a estilo, así que hasta acá el backend no tenía linter: solo
+    TreatWarningsAsErrors, que es el compilador.
+
+    Va en backend/ y no en la raíz del repositorio a propósito. MSBuild hereda este archivo hacia
+    abajo desde donde esté, y hoy los únicos proyectos del repo son los dos de acá; ponerlo en la
+    raíz le fijaría el alcance a cualquier proyecto futuro fuera del backend, que es una decisión
+    que este ticket no tomó.
+
+    Solo analizadores del SDK: ningún paquete NuGet de análisis (mitigación R-01 del threat model).
+    Un analizador es código de terceros que el compilador ejecuta en cada build —local y en el
+    runner de CI— con acceso al árbol de fuentes. Sumar uno exige justificarlo en su propia spec.
+
+    Qué reglas se aplican y cuáles se apagan: backend/.editorconfig
+  -->
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisMode>Recommended</AnalysisMode>
+  </PropertyGroup>
+
+</Project>

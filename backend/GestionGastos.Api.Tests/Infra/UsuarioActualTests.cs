@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using GestionGastos.Api.Common;
 using GestionGastos.Api.Data;
@@ -58,6 +59,13 @@ public sealed class UsuarioActualTests(BaseDeDatosFixture baseDeDatos)
     }
 
     [Fact]
+    [SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible for improved performance",
+        Justification =
+            "La variable se declara como IUsuarioActual a propósito: este test verifica el contrato de " +
+            "la abstracción cuando la fila semilla no existe. Usar el tipo concreto haría que pruebe " +
+            "otra cosa (AC-12 de FIX-001).")]
     public async Task UsuarioSemilla_SinLaFilaSembrada_LanzaUsuarioActualNoResuelto()
     {
         await baseDeDatos.LimpiarAsync();

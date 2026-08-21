@@ -334,7 +334,7 @@ public sealed class ListarMovimientosTests(BaseDeDatosFixture baseDeDatos)
     private static string OrdenamientoEmitido(RegistroDeSentencias sentencias) =>
         ObservadorDeSql.OrderByDe(sentencias, TablaDeMovimientos);
 
-    private static IReadOnlyList<JsonElement> Items(JsonElement listado)
+    private static List<JsonElement> Items(JsonElement listado)
     {
         Assert.True(listado.TryGetProperty("items", out var items), "La respuesta no trae 'items'.");
         Assert.Equal(JsonValueKind.Array, items.ValueKind);

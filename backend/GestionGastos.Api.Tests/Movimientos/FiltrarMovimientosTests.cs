@@ -399,12 +399,12 @@ public sealed class FiltrarMovimientosTests(BaseDeDatosFixture baseDeDatos)
     }
 
     /// <summary>Sentencias observadas que leyeron la tabla de movimientos.</summary>
-    private static IReadOnlyList<string> ConsultasSobreMovimientos(RegistroDeSentencias sentencias) =>
+    private static List<string> ConsultasSobreMovimientos(RegistroDeSentencias sentencias) =>
         sentencias.Sentencias
             .Where(s => s.Contains($"FROM `{TablaDeMovimientos}`", StringComparison.Ordinal))
             .ToList();
 
-    private static IReadOnlyList<JsonElement> Items(JsonElement listado)
+    private static List<JsonElement> Items(JsonElement listado)
     {
         Assert.True(listado.TryGetProperty("items", out var items), "La respuesta no trae 'items'.");
         Assert.Equal(JsonValueKind.Array, items.ValueKind);

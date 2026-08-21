@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using GestionGastos.Api.Data;
 using GestionGastos.Api.Data.Entidades;
@@ -13,6 +14,15 @@ namespace GestionGastos.Api.Tests.Infra;
 /// Los tests corren contra MySQL real por ADR-002: el tipo de columna y las restricciones del
 /// esquema son justamente lo que hay que verificar, y un proveedor en memoria es ciego a eso.
 /// </summary>
+[SuppressMessage(
+    "Performance",
+    "CA1822:Mark members as static",
+    Justification =
+        "Un fixture de colección de xUnit expone su API a través de la instancia que inyecta en cada " +
+        "clase de test: eso es el patrón, no un descuido. Hacer estáticos estos miembros rompería los " +
+        "33 llamadores de CrearContexto repartidos en 11 archivos, y C# no permite invocar un miembro " +
+        "estático a través de una instancia. El ticket que introdujo el linter (FIX-001) exige no " +
+        "cambiar comportamiento, así que la regla queda suprimida acá y sigue activa en el resto.")]
 public sealed class BaseDeDatosFixture : IAsyncLifetime
 {
     /// <summary>
@@ -140,7 +150,7 @@ public sealed class BaseDeDatosFixture : IAsyncLifetime
     /// La semilla se lee del modelo de EF y no se duplica acá: si la migración cambia el catálogo,
     /// la limpieza lo sigue sin que nadie tenga que acordarse.
     /// </summary>
-    private IEnumerable<IDictionary<string, object?>> SemillaDe<TEntidad>()
+    private List<IDictionary<string, object?>> SemillaDe<TEntidad>()
     {
         using var contexto = CrearContexto();
         // El modelo de runtime está optimizado para consultar y no conserva los datos sembrados.

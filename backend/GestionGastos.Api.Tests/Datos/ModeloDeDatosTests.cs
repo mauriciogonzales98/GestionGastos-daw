@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GestionGastos.Api.Common;
 using GestionGastos.Api.Data;
 using GestionGastos.Api.Data.Entidades;
@@ -139,6 +140,13 @@ public sealed class ModeloDeDatosTests(BaseDeDatosFixture baseDeDatos)
             () => contexto.Movimientos.CountAsync());
     }
 
+    [SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible for improved performance",
+        Justification =
+            "La variable se declara como IUsuarioActual a propósito: lo que este helper ejercita es el " +
+            "contrato de la abstracción, no la clase que hoy lo implementa. Usar el tipo concreto haría " +
+            "que el test pruebe otra cosa (AC-12 de FIX-001).")]
     private static async Task<int> ResolverUsuarioActualAsync(AppDbContext contexto)
     {
         IUsuarioActual usuarioActual = new UsuarioSemillaActual(contexto);

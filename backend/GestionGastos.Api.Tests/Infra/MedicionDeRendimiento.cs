@@ -71,8 +71,10 @@ public static class MedicionDeRendimiento
     /// El ancla es el año completo y no una ventana alrededor de hoy para no tener bordes de
     /// calendario que demostrar de a uno. Con <c>i % 365</c> sobre 1000 elementos, los offsets
     /// 0–269 llevan 3 filas y los 270–364 llevan 2, así que los días de mínimo caen en los
-    /// <b>últimos 95 del año</b>: el peor mes es <b>noviembre con 60 filas</b>, y febrero —que
-    /// intuitivamente parecería el peor por ser el más corto— tiene 84.
+    /// <b>últimos 95 del año</b>: el <b>piso es 60 filas, en noviembre</b>, y febrero —que
+    /// intuitivamente parecería el peor por ser el más corto— tiene 84. En un año bisiesto
+    /// diciembre empata en 60, porque 365 offsets desde el 1 de enero de un año de 366 días no
+    /// llegan al 31 de diciembre.
     ///
     /// El piso que el criterio exige es 2 por mes, así que sobra por 30 veces. Vale registrar que
     /// la primera versión de este comentario decía "56 filas en febrero", razonando

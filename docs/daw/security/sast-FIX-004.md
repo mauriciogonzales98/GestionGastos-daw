@@ -123,3 +123,55 @@ código ejecutable en absoluto** (es un comentario que decía un número equivoc
 aserciones de xUnit por otras aserciones de xUnit sobre `DateOnly`. Un análisis largo acá sería
 teatro. Lo que sí ameritaba revisarse —que el bucle correctivo no hubiera arrastrado nada a
 producción— está medido con `git diff --stat` y da 0 archivos fuera de `GestionGastos.Api.Tests/`.
+
+---
+
+## Ronda 3 — el bucle correctivo de la verificación ronda 2
+
+| Field | Value |
+|-------|-------|
+| Ronda | 3 |
+| Fecha | 2026-08-22 |
+| Alcance | 2 archivos, 15 líneas, ambos bajo `backend/GestionGastos.Api.Tests/` |
+| Resultado | **PASSED** — 0 Critical, 0 High, 0 Medium, 0 supresiones |
+
+### Qué se analizó
+
+| Archivo | Cambio |
+|---|---|
+| `Movimientos/RendimientoListadoTests.cs` | +11 líneas: un `Assert.True(esperadas > 0, ...)` con mensaje interpolado y 4 de comentario |
+| `Infra/MedicionDeRendimiento.cs` | +4/-2 líneas, **todas dentro de un XML-doc** (W-4) |
+
+### Categorías
+
+| Regla | Verificación | Resultado |
+|---|---|---|
+| F-SAST-01 secretos | `grep` sobre el diff por password/secret/token/api-key/connection string | ✅ 0 coincidencias |
+| F-SAST-02 inyección SQL | `FromSqlRaw`/`ExecuteSqlRaw` en el diff | ✅ 0 coincidencias; no hay consultas nuevas |
+| F-SAST-03 inyección de comandos | `Process.Start` en el diff | ✅ 0 coincidencias |
+| F-SAST-04 / F-SAST-17 deserialización | `eval`/`Deserialize` en el diff | ✅ 0 coincidencias |
+| F-SAST-05 path traversal | Rutas de archivo con entrada externa | ✅ Ninguna; el único string construido es una URL de test con dos `DateOnly` |
+| F-SAST-06 XSS | Salida HTML | ✅ N/A, no hay frontend en el diff |
+| F-SAST-07 SSRF | Destinos de petición | ✅ La ruta consultada es la de la API bajo prueba, con `Desde`/`Hasta` derivados del reloj, no de entrada externa |
+| F-SAST-08 cripto débil | Algoritmos | ✅ Ninguno en el diff |
+| F-SAST-09 debug en producción | — | ✅ 0 archivos de producción tocados |
+| F-SAST-10 logging sensible | `Console.`/`Log.` en el diff | ✅ 0 coincidencias. El mensaje nuevo sólo nombra dos fechas de un rango de test |
+| F-SAST-11 upload | — | ✅ N/A |
+| F-SAST-12 CSRF | — | ✅ N/A |
+| F-SAST-14 validación de entrada | El nuevo `Assert` **agrega** una validación, no la relaja | ✅ |
+| F-SAST-15 errores que filtran internals | El mensaje de fallo es de un test y expone un rango de fechas del sembrado | ✅ Sin internals |
+| F-SAST-13 / F-SAST-16 dependencias | `git diff main..HEAD` sobre `package.json`, el lock y los `.csproj` | ✅ 0 archivos de dependencias tocados; nada que auditar de nuevo |
+| F-SAST-18 / F-SAST-19 supresiones | — | ✅ 0 supresiones, acumuladas en las 3 rondas |
+
+### Supresiones
+
+**Ninguna**, en ninguna de las tres rondas.
+
+### Resultado
+
+**PASSED** — 0 Critical, 0 High, 0 Medium.
+
+La superficie de ataque no se movió: el cambio es una aserción de xUnit y un comentario, en un
+proyecto de tests que no se despliega. Lo que sí valía la pena volver a medir —que el segundo bucle
+correctivo tampoco arrastrara nada a producción— da **0 archivos fuera de `GestionGastos.Api.Tests/`**
+según `git diff main..HEAD`.

@@ -48,6 +48,17 @@ public sealed class RendimientoListadoTests(BaseDeDatosFixture baseDeDatos)
         // cosa y podría dar verde igual. Las esperadas salen de las fechas realmente sembradas, no
         // de un número a mano.
         var esperadas = MedicionDeRendimiento.FechasSembradas.Count(f => f >= Desde && f <= Hasta);
+
+        // El otro lado del mismo modo de falla que ConfirmarQueElMesTieneFilas() cubre en
+        // RendimientoResumenTests: si el rango dejara de coincidir con el sembrado, `esperadas`
+        // valdría 0, la API devolvería 0, y las dos aserciones de abajo compararían 0 con 0. El test
+        // daría VERDE cronometrando una consulta vacía — que es el defecto que FIX-004 corrige.
+        Assert.True(
+            esperadas > 0,
+            $"El rango {Desde.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.." +
+            $"{Hasta.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} no contiene ninguna fila " +
+            "del sembrado, así que la medición cronometraría una consulta vacía comparando 0 con 0.");
+
         using (var calentamiento = await cliente.GetAsync(RutaFiltrada))
         {
             Assert.Equal(HttpStatusCode.OK, calentamiento.StatusCode);

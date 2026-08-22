@@ -84,6 +84,25 @@ a [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **FEAT-003** — El contrato HTTP estaba escrito **dos veces**, a mano y en dos lenguajes —los
+  `record` de C# y las interfaces de `frontend/src/api/tipos.ts`—, y nada comparaba las dos copias.
+  Medido: renombrar un campo del DTO de forma coherente en todo el backend dejaba en verde el build
+  con `-warnaserror`, los 142 tests del backend, `tsc --noEmit`, los 105 de Vitest, ESLint y la
+  barrera del linter, y llegaba `undefined` a la pantalla.
+  - `frontend/src/api/tipos.ts` deja de ser documentación y pasa a ser la **especificación
+    ejecutable** del contrato: la verificación lo lee como fuente de verdad y lo compara contra el
+    JSON que la API emite de verdad, en los cuatro `GET` y en los dos cuerpos de petición.
+  - Compara **en las dos direcciones**: un campo que el backend emite y el frontend no declara es
+    funcionalidad invisible; uno declarado que el backend no emite es un `undefined` en pantalla.
+  - Contra el JSON real y no contra el `record`, porque nadie configura la serialización en este
+    proyecto: el camelCase que el frontend asume es el comportamiento por defecto de ASP.NET Core, y
+    un esquema derivado del `record` no lo verificaría.
+  - El parser es **estricto**: lo que no reconoce lanza, nunca saltea. Un tipo salteado quedaría
+    *pareciendo* verificado, que es el defecto de este ticket un nivel más arriba.
+  - `backend/verificar-contrato.sh` comprueba, en cada PR, que la barrera **se pone en rojo** cuando
+    tiene que ponerse, y muestra el campo y el endpoint al fallar.
+  - **0 dependencias nuevas** y **0 archivos de producción tocados**.
+
 - **FIX-003** — El validador de PRDs comparaba los identificadores de requisito por subcadena, y
   `FR-01` es subcadena de `NFR-01`. La consecuencia conocida era un aviso espurio de `W-PRD-02`;
   la que no estaba documentada es peor: `F-PRD-01` —una regla **FAIL**— daba un falso negativo, y
@@ -98,6 +117,12 @@ a [Versionado Semántico](https://semver.org/lang/es/).
   git. El contenido del script no cambió.
 
 ### Changed
+
+- **FEAT-003** — El pipeline de integración continua pasa a correr también con `push` sobre
+  cualquier rama que no sea `main`, además de en los pull requests. El motivo está medido: hasta
+  acá ningún ticket podía ver ni medir su propio pipeline antes de la fase de release, y eso ya
+  había costado un ticket entero (FIX-002), cuando la primera corrida real encontró un bit de
+  ejecución faltante que ninguna comprobación local podía encontrar.
 
 - **FEAT-001b** — El total del listado y la señal `recortado` se calculan sobre el universo **ya
   filtrado**. Contando todo lo del propietario, `recortado` mentiría con un filtro angosto.

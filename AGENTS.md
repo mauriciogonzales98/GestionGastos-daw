@@ -55,6 +55,8 @@ files and **propose the text for you to paste here**. You always confirm it.
 | Test (frontend) | `pnpm --dir frontend test` |
 | Lint (backend) | `dotnet format backend/GestionGastos.sln --verify-no-changes` — espejo de `prettier --check`: verifica sin modificar archivos |
 | Build (backend) | `dotnet build backend/GestionGastos.sln -warnaserror` — además de compilar corre los analizadores de Roslyn, así que un hallazgo de calidad rompe el build. Qué reglas se aplican y cuáles se apagan, con su motivo: `backend/.editorconfig` |
+| Cobertura (backend) | `dotnet test backend/GestionGastos.sln --settings backend/cobertura.runsettings` — mide tambien el codigo de `Contrato/`, que vive en el proyecto de tests y que coverlet no instrumenta por defecto |
+| Barrera del contrato (backend) | `./backend/verificar-contrato.sh` — comprueba que la verificación del contrato frontend↔backend se pone en rojo cuando el contrato se desalinea, no sólo que los tests pasan. Corre `dotnet test` tres veces, así que tarda ~90 s |
 | Barrera del linter (backend) | `./backend/verificar-linter.sh` — comprueba que la barrera del linter siga en pie: una violación deliberada rompe el build en código escrito a mano y no lo rompe dentro de `Migrations/`. Compila con un archivo temporal adentro, así que va después de los tests |
 | Test (backend) | `dotnet test backend/` — requiere `ConnectionStrings__Default` apuntando a `gestiongastos_test` (ADR-002). CI agrega `--filter "FullyQualifiedName!~Rendimiento"`: los tests de rendimiento miden tiempo de pared y en un runner compartido dan rojos que no dicen nada. En local corren todos |
 
@@ -66,6 +68,7 @@ files and **propose the text for you to paste here**. You always confirm it.
 Leave it empty and that validation has nothing to compare against, so it stops being worth running.
 
 - **Folder structure:** frontend y backend separados en sus respectivas carpetas(`backend/` para el backend y `frontend/` para el frontend). 
+- **Folder structure — la única excepción, declarada:** los tests de `backend/GestionGastos.Api.Tests/Contrato/` **leen** `frontend/src/api/tipos.ts`. Comparar las dos definiciones del contrato exige que algo mire a las dos; el motivo y el alcance están en `docs/adr/adr-004-verificacion-del-contrato.md`. Es lectura, en una sola dirección: el frontend no lee nada del backend, y eso no cambia.
 - **Error handling:** typed errors; never a silent catch
 - **Dependencies:** no new libraries without justifying them in the spec
 

@@ -53,9 +53,17 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
   > `docs/daw/specs/rca-FIX-001.md` (2026-08-20): **158 hallazgos únicos**, 143 en tests y 15 en
   > producción, con 117 CA1707 y 9 CA1725. Y el dato que cambió la forma del ticket: en producción
   > no había **ninguna** corrección que hacer a mano, solo tres decisiones de configuración.
-- **D-2 · Vitest sin `typecheck`.** Un contrato del frontend desalineado con el DTO del backend deja
-  la suite verde y aparece como `undefined` en pantalla. Demostrado con una mutación en el Block 3
-  de FEAT-001c. Hoy solo lo detecta `tsc --noEmit`, que corre aparte.
+- **D-2 · Contrato frontend↔backend sin verificar. ✅ HECHO** — FEAT-003 (PR #9). La verificación
+  lee `frontend/src/api/tipos.ts` como fuente de verdad y lo compara contra el JSON que la API emite
+  de verdad, en las dos direcciones y en los cuatro `GET` más los dos cuerpos de petición.
+  > **Este ítem estaba mal descrito, y en el punto que más importaba.** Decía *"hoy sólo lo detecta
+  > `tsc --noEmit`, que corre aparte"*, lo que implicaba que el arreglo era meter el typecheck en el
+  > comando de test. La medición del 2026-08-21 lo refutó: los tipos del frontend están escritos a
+  > mano y no derivan de nada del backend, así que un rename **coherente** del backend deja en verde
+  > el build, los 142 tests, `tsc`, los 105 de Vitest, ESLint y la barrera del linter — y llega
+  > `undefined` a la pantalla. `tsc` verifica que el frontend sea coherente **consigo mismo**, no que
+  > coincida con el backend. Por eso el ticket salió FEATURE y no la corrección de configuración que
+  > este ítem sugería.
 - **D-3 · El fixture de rendimiento vence el 2027-01-01.** `MedicionDeRendimiento.FechasSembradas`
   siembra fechas de 2026 mientras el resumen usa el reloj real. Registrado como W-VER-03. No es una
   regresión, es el arnés. Arreglarlo obliga a revisar los otros dos tests de rendimiento que
@@ -151,8 +159,9 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 
 ```
 D-1 linter backend  ─┐  ✅ FIX-001 + FIX-002
-D-2 vitest typecheck ├─→ (infraestructura, sin PRD, primero por decisión del usuario)
-D-3 fixture 2027     │
+D-2 contrato sin     ├─→ (infraestructura, sin PRD, primero por decisión del usuario)
+    verificar        │   ✅ FEAT-003
+D-3 fixture 2027     │   ← lo único que queda
 D-4 subcadena en    ─┘  ✅ FIX-003
     validate_prd.py
                      │

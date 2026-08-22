@@ -10,8 +10,16 @@ public sealed class RendimientoListadoTests(BaseDeDatosFixture baseDeDatos)
 {
     private const int CategoriaComidaId = 1;
 
-    private static readonly DateOnly Desde = new(2026, 3, 1);
-    private static readonly DateOnly Hasta = new(2026, 3, 31);
+    /// <summary>
+    /// El rango que se mide: marzo del año en curso. Se deriva del mismo reloj que
+    /// <see cref="MedicionDeRendimiento.FechasSembradas"/> y no de un año literal, porque un rango
+    /// fijo deja de coincidir con el sembrado en cuanto cambia el año — que es el defecto que
+    /// FIX-004 corrige del otro lado.
+    /// </summary>
+    private static readonly int AnioEnCurso = DateTime.Today.Year;
+
+    private static readonly DateOnly Desde = new(AnioEnCurso, 3, 1);
+    private static readonly DateOnly Hasta = new(AnioEnCurso, 3, 31);
 
     /// <summary>El listado filtrado, que es lo que la aplicación pide de entrada: categoría más rango.</summary>
     private static readonly string RutaFiltrada =
@@ -40,6 +48,17 @@ public sealed class RendimientoListadoTests(BaseDeDatosFixture baseDeDatos)
         // cosa y podría dar verde igual. Las esperadas salen de las fechas realmente sembradas, no
         // de un número a mano.
         var esperadas = MedicionDeRendimiento.FechasSembradas.Count(f => f >= Desde && f <= Hasta);
+
+        // El otro lado del mismo modo de falla que ConfirmarQueElMesTieneFilas() cubre en
+        // RendimientoResumenTests: si el rango dejara de coincidir con el sembrado, `esperadas`
+        // valdría 0, la API devolvería 0, y las dos aserciones de abajo compararían 0 con 0. El test
+        // daría VERDE cronometrando una consulta vacía — que es el defecto que FIX-004 corrige.
+        Assert.True(
+            esperadas > 0,
+            $"El rango {Desde.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.." +
+            $"{Hasta.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} no contiene ninguna fila " +
+            "del sembrado, así que la medición cronometraría una consulta vacía comparando 0 con 0.");
+
         using (var calentamiento = await cliente.GetAsync(RutaFiltrada))
         {
             Assert.Equal(HttpStatusCode.OK, calentamiento.StatusCode);

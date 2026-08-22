@@ -64,10 +64,22 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
   > `undefined` a la pantalla. `tsc` verifica que el frontend sea coherente **consigo mismo**, no que
   > coincida con el backend. Por eso el ticket salió FEATURE y no la corrección de configuración que
   > este ítem sugería.
-- **D-3 · El fixture de rendimiento vence el 2027-01-01.** `MedicionDeRendimiento.FechasSembradas`
-  siembra fechas de 2026 mientras el resumen usa el reloj real. Registrado como W-VER-03. No es una
-  regresión, es el arnés. Arreglarlo obliga a revisar los otros dos tests de rendimiento que
-  comparten `SembrarMovimientosAsync`.
+- **D-3 · El fixture de rendimiento vence el 2027-01-01. ✅ HECHO** — FIX-004 (PR #10).
+  `GenerarFechasSembradas(DateOnly)` es ahora una función pura parametrizada por fecha, anclada al
+  año en curso, siguiendo el patrón que producción ya usaba para el calendario (`RangoDelMes.De`).
+  El piso quedó calculado: 60 filas en el peor mes contra las 2 que el criterio exige.
+  > **Este ítem se equivocaba en las dos direcciones, y conviene que quede escrito.**
+  > **Exageraba** al decir que arreglarlo obligaba a revisar *los otros dos* tests de rendimiento:
+  > `RendimientoListadoTests` sí hubo que tocarlo —su rango estaba fijo en marzo de 2026 y dejaba de
+  > coincidir en cuanto el sembrado se volvía relativo—, pero `RendimientoAltaTests` no depende de
+  > fechas y no se tocó, y `RendimientoResumenTests` tampoco: el plan predijo que no haría falta y
+  > las tres rondas de verificación lo confirmaron. Uno de dos, no dos de dos.
+  > **Y omitía lo que más acotaba el daño:** `ConfirmarQueElMesTieneFilas()` ya existía y convertía
+  > el fallo silencioso en uno explícito. Sin ese guardarraíl el test habría pasado en verde
+  > midiendo una consulta vacía, y el ítem lo habría descrito como una rotura y no como un arnés que
+  > avisa.
+  > **Lo que el ítem no podía ver:** el test hermano, `RendimientoListadoTests`, no tenía guardarraíl
+  > propio. FIX-004 le agregó el suyo tras un FAIL en la ronda 2 de verificación.
 
 - **D-4 · Comparación por subcadena en el validador de PRDs. ✅ HECHO** — FIX-003 (PR #8).
   `.daw/scripts/validate_prd.py` comparaba los identificadores con `if i in t`, y `"FR-01"` es
@@ -161,7 +173,7 @@ de que ninguna vea los datos de otra (AC-06..AC-08).
 D-1 linter backend  ─┐  ✅ FIX-001 + FIX-002
 D-2 contrato sin     ├─→ (infraestructura, sin PRD, primero por decisión del usuario)
     verificar        │   ✅ FEAT-003
-D-3 fixture 2027     │   ← lo único que queda
+D-3 fixture 2027     │   ✅ FIX-004  ← deuda de infraestructura cerrada
 D-4 subcadena en    ─┘  ✅ FIX-003
     validate_prd.py
                      │

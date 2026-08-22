@@ -10,8 +10,16 @@ public sealed class RendimientoListadoTests(BaseDeDatosFixture baseDeDatos)
 {
     private const int CategoriaComidaId = 1;
 
-    private static readonly DateOnly Desde = new(2026, 3, 1);
-    private static readonly DateOnly Hasta = new(2026, 3, 31);
+    /// <summary>
+    /// El rango que se mide: marzo del año en curso. Se deriva del mismo reloj que
+    /// <see cref="MedicionDeRendimiento.FechasSembradas"/> y no de un año literal, porque un rango
+    /// fijo deja de coincidir con el sembrado en cuanto cambia el año — que es el defecto que
+    /// FIX-004 corrige del otro lado.
+    /// </summary>
+    private static readonly int AnioEnCurso = DateTime.Today.Year;
+
+    private static readonly DateOnly Desde = new(AnioEnCurso, 3, 1);
+    private static readonly DateOnly Hasta = new(AnioEnCurso, 3, 31);
 
     /// <summary>El listado filtrado, que es lo que la aplicación pide de entrada: categoría más rango.</summary>
     private static readonly string RutaFiltrada =

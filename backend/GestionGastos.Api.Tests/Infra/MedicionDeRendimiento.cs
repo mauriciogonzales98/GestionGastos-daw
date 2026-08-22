@@ -41,14 +41,54 @@ public static class MedicionDeRendimiento
     public static readonly TimeSpan PresupuestoP95Pantalla = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Las fechas de los movimientos sembrados, repartidas sobre un año. Se declaran una sola vez
-    /// porque son a la vez lo que se siembra y de donde sale cuántas filas tiene que devolver un
-    /// rango: un número copiado a mano dejaría de valer en cuanto alguien tocara el sembrado.
+    /// Las fechas de los movimientos sembrados, repartidas sobre el año en curso. Se declaran una
+    /// sola vez porque son a la vez lo que se siembra y de donde sale cuántas filas tiene que
+    /// devolver un rango: un número copiado a mano dejaría de valer en cuanto alguien tocara el
+    /// sembrado.
     /// </summary>
-    public static readonly IReadOnlyList<DateOnly> FechasSembradas = Enumerable
-        .Range(0, MovimientosSembrados)
-        .Select(i => new DateOnly(2026, 1, 1).AddDays(i % 365))
-        .ToList();
+    public static readonly IReadOnlyList<DateOnly> FechasSembradas =
+        GenerarFechasSembradas(DateOnly.FromDateTime(DateTime.Today));
+
+    /// <summary>
+    /// Reparte <see cref="MovimientosSembrados"/> fechas sobre los 365 días que siguen al 1 de enero
+    /// del año de <paramref name="hoy"/>.
+    /// </summary>
+    /// <param name="hoy">La fecha de ejecución. Sólo se usa su año.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>La propiedad que estas fechas deben cumplir, y que no puede quedar implícita:</b> tienen
+    /// que cubrir <b>el mes en curso, sea cual sea</b>, porque <c>RendimientoResumenTests</c> mide
+    /// contra el mes que el servidor fija con el reloj real. Por eso el ancla **no puede llevar un
+    /// año escrito literalmente**.
+    /// </para>
+    /// <para>
+    /// Eso fue exactamente el defecto de FIX-004: la versión anterior decía
+    /// <c>new DateOnly(2026, 1, 1)</c>, que significaba "el 1 de enero del año en curso" el día en
+    /// que se escribió y quedó absoluta en el archivo. Desde el 2027-01-01 dejaba el mes en curso
+    /// con cero filas, y para siempre.
+    /// </para>
+    /// <para>
+    /// El ancla es el año completo y no una ventana alrededor de hoy para no tener bordes de
+    /// calendario que demostrar de a uno: con <c>i % 365</c> sobre 1000 elementos, 270 días llevan 3
+    /// filas y 95 llevan 2, así que el mínimo por día es 2 y el peor mes posible —un febrero común
+    /// de 28 días— deja 56 filas.
+    /// </para>
+    /// <para>
+    /// Es función pura y parametrizada por fecha siguiendo el patrón que este proyecto ya usa para
+    /// la lógica de calendario: <c>RangoDelMes.De(DateOnly)</c>, que producción llama con
+    /// <c>DateTime.Today</c> y que <c>RangoDelMesTests</c> prueba con fechas simuladas. Así los
+    /// bordes se comprueban sin esperar a que el calendario llegue.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<DateOnly> GenerarFechasSembradas(DateOnly hoy)
+    {
+        var primerDiaDelAnio = new DateOnly(hoy.Year, 1, 1);
+
+        return Enumerable
+            .Range(0, MovimientosSembrados)
+            .Select(i => primerDiaDelAnio.AddDays(i % 365))
+            .ToList();
+    }
 
     /// <summary>
     /// Método del rango más cercano: el menor valor por debajo del cual cae al menos el percentil

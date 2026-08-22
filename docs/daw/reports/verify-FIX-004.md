@@ -222,3 +222,113 @@ que el paso 2 del fix-plan comprometió. Es un cambio de una línea y no toca pr
 
 W-4 queda a criterio: es un comentario, no un test, y su corrección es de una frase.
 W-3 sigue como deuda declarada de la ronda 1, sin tocar.
+
+---
+
+## Ronda 3: PASSED
+
+| Field | Value |
+|-------|-------|
+| Ticket | FIX-004 |
+| Tier | FIX |
+| Ronda | 3 |
+| Fecha | 2026-08-22 |
+| Resultado | **PASSED** — 0 FAIL, 0 WARN nuevos, 13 PASS |
+| Verificador | verificación directa sobre `471130d`, reejecutando cada comprobación |
+
+```
+FAILs: 0 | WARNs nuevos: 0 | PASSes: 13  →  PASSED
+```
+
+> **Nota de independencia, que conviene que quede escrita.** La corrección de esta ronda la escribió
+> el mismo agente que la verifica, a diferencia de la ronda 1, que pasó por `daw-module-verifier`.
+> Se compensa reejecutando **todo** —las dos contra-pruebas incluidas— en vez de aceptar lo que el
+> cierre de CODE afirmó. La debilidad queda dicha igual: leer el propio código es la clase de
+> verificación que este ticket existe para desconfiar.
+
+### El FAIL de la ronda 2, cerrado
+
+`RendimientoListadoTests.cs:56-59` tiene ahora la aserción que el paso 2 del fix-plan comprometió:
+
+```csharp
+Assert.True(
+    esperadas > 0,
+    $"El rango {…Desde…}..{…Hasta…} no contiene ninguna fila del sembrado, así que la " +
+    "medición cronometraría una consulta vacía comparando 0 con 0.");
+```
+
+**Reejecuté las dos mitades de la prueba, no una:**
+
+| Experimento | Resultado |
+|---|---|
+| Rango desincronizado a marzo de 2020, **con** la aserción | ❌ Rojo, con el mensaje nombrando el rango: `El rango 2020-03-01..2020-03-31 no contiene ninguna fila del sembrado` |
+| Rango desincronizado a marzo de 2020, **sin** la aserción | ✅ **Verde** — `esperadas` = 0, la API devuelve 0, `Equal(0,0)` se cumple y el p95 de una consulta vacía entra holgado |
+
+El segundo experimento es el que importa: confirma que el FAIL de la ronda 2 describía un modo de
+falla **real y abierto**, no una formalidad del reglamento. Sin esa línea, desincronizar el rango
+dejaba el test midiendo nada, en verde.
+
+### W-4, corregido
+
+El comentario pasa de «el peor mes es noviembre con 60 filas» a **«el piso es 60 filas, en
+noviembre»**, con el empate dicho: en un año bisiesto diciembre también da 60, porque 365 offsets
+desde el 1 de enero de un año de 366 días no llegan al 31 de diciembre. Verificado contra el cálculo:
+2028 da `{ene 93, feb 87, …, nov 60, dic 60}`.
+
+### Alcance del cambio del bucle
+
+15 líneas, 2 archivos, **ambos bajo `GestionGastos.Api.Tests/`**, y el diff es **puramente aditivo**
+salvo las 2 líneas del comentario reescrito. El cierre de CODE registró haber descartado un refactor
+de `RutaFiltrada` que apareció al escribir la aserción — correcto: un FIX no es el momento, y el
+`git diff` confirma que `RutaFiltrada` quedó como estaba.
+
+### Los once AC
+
+| AC | Verificación en la ronda 3 |
+|---|---|
+| AC-01 | ✅ Piso recalculado: mínimo 60 filas por mes contra las 2 que el criterio exige. `Generador_EnCualquierMesDelAnio_DejaAlMenosDosFilasEnEseMes` recorre los 12 meses |
+| AC-02 | ✅ `Generador_EnFechasPosterioresAlVencimientoViejo_CubreElMesDeEsaFecha` con 2027-01-01, 2027-06-15 y 2030-12-31 |
+| AC-03 | ✅ El cuerpo del generador es `new DateOnly(hoy.Year, 1, 1)`: 0 años literales. El «2026» sobreviviente está en el XML-doc, citando el defecto |
+| AC-04 | ✅ `ConfirmarQueElMesTieneFilas()` intacto: definido en la línea 218, invocado en la 76 y la 159 |
+| **AC-05** | ✅ **Cerrado.** `RendimientoListadoTests.cs:56`, y demostrado no vacío con las dos contra-pruebas de arriba |
+| AC-06 | ✅ 8/8 verdes, exit 0, reejecutado |
+| AC-07 | ✅ Contra-prueba del año literal **reejecutada sobre el árbol final**: 6/8 en rojo, exit 1 |
+| AC-08 | ✅ La propiedad y su motivo están escritos junto al generador, ahora con el número correcto y el empate del bisiesto |
+| AC-09 | ✅ **289 verdes reejecutados**: 184 backend + 105 frontend. `MovimientosSembrados` = 1000, `Ejecuciones` = 100 |
+| AC-10 | ✅ `git diff --stat main..HEAD` sobre `backend/GestionGastos.Api/` y `frontend/src/`: **vacío** |
+| AC-11 | ✅ 0 deps nuevas (diff vacío en `package.json`, el lock y los `.csproj`); `PresupuestoP95` = 1 s, `PresupuestoP95Pantalla` = 2 s |
+
+### Los pasos del fix-plan
+
+| Paso | Estado |
+|---|---|
+| 1 — función pura y ancla relativa | ✅ `GenerarFechasSembradas(DateOnly)`, patrón de `RangoDelMes.De` |
+| 2 — rango de `RendimientoListadoTests` | ✅ **Completo por fin**: el rango deriva del ancla **y** la aserción de «al menos una fila» existe |
+| 3 — test del generador | ✅ 6 métodos / 8 casos, fechas simuladas, sin tocar el reloj |
+| 4 — `RendimientoResumenTests` no se toca | ✅ Predicción cumplida en las 3 rondas: no aparece en `git diff --name-only main..HEAD` |
+
+### Calidad
+
+| Regla | Resultado |
+|---|---|
+| F-VER-01 AC con test | ✅ Los 11 AC con evidencia ejecutable o medición reejecutada |
+| F-VER-02 pasos implementados | ✅ Los 3 pasos más la comprobación del paso 4 |
+| F-VER-03 cobertura | ✅ El código cambiado es infraestructura de test, ejercitada directamente; `GenerarFechasSembradas` no tiene ramas |
+| F-VER-04 sad paths | ✅ Año bisiesto, año común, primer y último día del mes, años lejanos. La aserción nueva **es** el sad path del rango |
+| F-VER-05 lint / typecheck | ✅ Build `-warnaserror` 0 warnings · `dotnet format --verify-no-changes` limpio · `eslint` limpio · `tsc --noEmit` limpio |
+| F-VER-06 tests de la spec | ✅ Los 11 compromisos de la lista de Tests, incluido el que faltaba |
+| W-VER-01 código muerto | ✅ Ninguno. El helper `Iso()` que apareció y no hacía falta se descartó antes de commitear |
+| W-VER-03 tests frágiles | ✅ Los tests del generador reciben fechas literales como **entrada de una función pura**, patrón de `RangoDelMesTests` |
+
+### Deuda que este ticket deja declarada y NO cierra
+
+- **W-3 (ronda 1)** — con el sembrado anclado al año completo, `ConfirmarQueElMesTieneFilas()` pasó de
+  «última línea de defensa» a defensa redundante, y el PRD y el RCA lo siguen describiendo con la
+  formulación optimista. Se conserva porque FR-02 lo pide y su costo es cero. Tocar
+  `RendimientoResumenTests` contradiría la predicción del paso 4 que el ticket verificó tres veces.
+- La errata del «peor mes» **también vive en el RCA y en el fix-plan**, que no se pueden modificar
+  desde CODE ni VERIFY. Su corrección quedó sólo en el código y en este reporte.
+
+### Acción
+
+**Gate `verify` cumplido.** Listo para RELEASE.

@@ -69,9 +69,15 @@ public static class MedicionDeRendimiento
     /// </para>
     /// <para>
     /// El ancla es el año completo y no una ventana alrededor de hoy para no tener bordes de
-    /// calendario que demostrar de a uno: con <c>i % 365</c> sobre 1000 elementos, 270 días llevan 3
-    /// filas y 95 llevan 2, así que el mínimo por día es 2 y el peor mes posible —un febrero común
-    /// de 28 días— deja 56 filas.
+    /// calendario que demostrar de a uno. Con <c>i % 365</c> sobre 1000 elementos, los offsets
+    /// 0–269 llevan 3 filas y los 270–364 llevan 2, así que los días de mínimo caen en los
+    /// <b>últimos 95 del año</b>: el peor mes es <b>noviembre con 60 filas</b>, y febrero —que
+    /// intuitivamente parecería el peor por ser el más corto— tiene 84.
+    ///
+    /// El piso que el criterio exige es 2 por mes, así que sobra por 30 veces. Vale registrar que
+    /// la primera versión de este comentario decía "56 filas en febrero", razonando
+    /// "mínimo por día × mes más corto" sin mirar DÓNDE caen los días de mínimo. Lo detectó la
+    /// verificación cruzada de FIX-004 recalculándolo, no ningún test.
     /// </para>
     /// <para>
     /// Es función pura y parametrizada por fecha siguiendo el patrón que este proyecto ya usa para

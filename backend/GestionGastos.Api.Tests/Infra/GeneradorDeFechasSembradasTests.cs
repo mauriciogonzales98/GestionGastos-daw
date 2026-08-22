@@ -63,18 +63,29 @@ public sealed class GeneradorDeFechasSembradasTests
     /// <summary>
     /// El borde que el propio repositorio ya aprendió a probar: <c>RangoDelMesTests</c> ejercita un
     /// febrero bisiesto porque un último día fijo en 28 —o en 29— acierta uno de los dos casos y
-    /// falla el otro. El sembrado no debería tener ese borde, y esto lo comprueba en vez de
-    /// suponerlo.
+    /// falla el otro.
+    ///
+    /// Estos dos tests <b>distinguen de verdad</b> los dos casos: uno exige que el 29 esté sembrado
+    /// y cuenta 29 días distintos, el otro exige que no esté y cuenta 28. La versión anterior
+    /// aplicaba la misma aserción a los dos años y prometía en su nombre una distinción que no
+    /// hacía — lo señaló la verificación cruzada de FIX-004.
     /// </summary>
-    [Theory]
-    [InlineData(2028)] // bisiesto
-    [InlineData(2029)] // común
-    public void Generador_EnFebrero_CubreElMesEnBisiestoYEnComun(int anio)
+    [Fact]
+    public void Generador_EnUnAnioBisiesto_SiembraElVeintinueveDeFebrero()
     {
-        var enFebrero = FechasDelMesDe(new DateOnly(anio, 2, 14));
+        var enFebrero = FechasDelMesDe(new DateOnly(2028, 2, 14));
 
-        Assert.NotEmpty(enFebrero);
-        Assert.All(enFebrero, fecha => Assert.Equal(2, fecha.Month));
+        Assert.Contains(new DateOnly(2028, 2, 29), enFebrero);
+        Assert.Equal(29, enFebrero.Select(f => f.Day).Distinct().Count());
+    }
+
+    [Fact]
+    public void Generador_EnUnAnioComun_NoIntentaSembrarElVeintinueveDeFebrero()
+    {
+        var enFebrero = FechasDelMesDe(new DateOnly(2029, 2, 14));
+
+        Assert.DoesNotContain(new DateOnly(2029, 2, 28).AddDays(1), enFebrero);
+        Assert.Equal(28, enFebrero.Select(f => f.Day).Distinct().Count());
     }
 
     /// <summary>

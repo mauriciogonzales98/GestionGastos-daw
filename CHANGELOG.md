@@ -84,6 +84,33 @@ a [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Fixed
 
+- **FIX-004** — El arnés que mide el rendimiento de la pantalla principal sembraba 1000 movimientos
+  con fechas **clavadas en 2026**, mientras el endpoint de resumen calcula el mes en curso con el
+  reloj real. Desde el 2027-01-01 las dos cosas dejaban de intersecarse, y **para siempre**: no era
+  una ventana de un año, era un sembrado anclado a un año absoluto. Medido el 2026-08-22: 93 filas
+  caían dentro del mes y el oráculo del test valía 64 356; desde el 2027-01-01, 0 y 0.
+  - La causa raíz es una fecha escrita **relativa al reloj de quien la escribió y absoluta en el
+    archivo**: `new DateOnly(2026, 1, 1)` significaba "el 1 de enero del año en curso" el día en que
+    se tecleó. Lo que nunca se escribió es que la propiedad requerida era *cubrir el mes en curso,
+    sea cual sea*.
+  - El arreglo **no inventa un patrón**: copia el que el propio repositorio ya usa en producción para
+    la lógica de calendario, `RangoDelMes.De(DateOnly)`. `GenerarFechasSembradas(DateOnly)` es una
+    función pura parametrizada por fecha, y el envoltorio la llama con el año en curso.
+  - El ancla es el **año completo** y no una ventana alrededor de hoy, para no tener bordes de
+    calendario que demostrar de a uno. El piso quedó calculado, no estimado: 60 filas en el peor mes
+    contra las 2 que el criterio exige.
+  - La propiedad que las fechas deben cumplir, y el motivo por el que no puede llevar un año literal,
+    quedan **escritos junto al generador**. El literal fue la causa raíz; el comentario es lo que
+    evita reintroducirlo.
+  - Se agregó además la afirmación que faltaba del otro lado: `RendimientoListadoTests` ahora exige
+    que el rango que consulta contenga **al menos una fila** del sembrado. Sin ella, un rango
+    desincronizado dejaba el test **en verde cronometrando una consulta vacía** — comprobado sacando
+    la aserción y viéndolo pasar.
+  - El guardarraíl que ya existía, `ConfirmarQueElMesTieneFilas()`, **se conserva**. Su valor no
+    depende de que el sembrado esté bien hoy.
+  - **0 archivos de producción tocados**, 0 dependencias nuevas, y los presupuestos de 1 s y 2 s sin
+    mover, para que las mediciones de antes y después sigan siendo comparables.
+
 - **FEAT-003** — El contrato HTTP estaba escrito **dos veces**, a mano y en dos lenguajes —los
   `record` de C# y las interfaces de `frontend/src/api/tipos.ts`—, y nada comparaba las dos copias.
   Medido: renombrar un campo del DTO de forma coherente en todo el backend dejaba en verde el build
